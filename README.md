@@ -59,3 +59,18 @@ Derleme `dist/client` altında istemci dosyaları, `dist/server/index.js` altın
 Değişiklikleri ayrı dallarda hazırlayıp pull request açın. Birleştirmeden önce yukarıdaki derleme ve kontrolleri çalıştırın. Gerçek uçak verisi eklenecekse kaynağı, sürümü ve operatör onayı ayrıca belgelenmelidir.
 
 GitHub'a yapılan değişiklikler Sites uygulamasını otomatik yayımlamaz. Bu depo ilk yayınlanan prototipin kaynak kopyasıdır; güncellenen sürümün Sites'a aktarımı ayrı bir adımdır. `.openai/hosting.json` mevcut projeyi işaret eder; yeni, bağımsız bir Sites uygulaması oluşturulacaksa yeni proje kimliği kullanılmalıdır.
+
+## GitHub Pages
+
+[GitHub Pages uygulaması](https://shalvadze-bot.github.io/boeing-747-cargo-planner/)
+
+`main` dalına gönderilen değişiklikler `.github/workflows/pages.yml` ile test edilir, derlenir ve yalnızca `dist/client` çıktısı GitHub Pages’e yayımlanır. Depoda Settings → Pages → Source seçeneği **GitHub Actions** olmalıdır. Kaynak `index.html` dosyasını doğrudan yayımlamayın; tarayıcı JSX geliştirme dosyalarını çalıştıramaz.
+
+Pages derlemesini yerelde kontrol etmek için:
+
+```sh
+VITE_BASE_PATH=/boeing-747-cargo-planner/ npm run build
+node --test tests/engine.test.mjs tests/sites-worker.test.mjs tests/pages-build.test.mjs
+```
+
+Varsayılan `npm run build`, mevcut Sites uygulaması için kök (`/`) yolunu korur. GitHub Pages yayını Sites uygulamasını değiştirmez.
