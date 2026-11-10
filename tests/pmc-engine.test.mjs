@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PMC,DEFAULT_CONFIG,SAMPLE_CARGO,contourHeight,runPacking} from '../src/pmc-engine.mjs';
+import {spawnSync} from 'node:child_process';
+import {PMC,DEFAULT_CONFIG,SAMPLE_CARGO,contourHeight,runPacking,supportCoverage} from '../src/pmc-engine.mjs';
 const row=(overrides={})=>({id:'a',name:'Test',width:60,length:80,height:40,quantity:1,...overrides});
 const eps=1e-5;
 function invariant(r){
@@ -10,7 +11,22 @@ function invariant(r){
  assert.ok(b.z+b.h<=Math.min(contourHeight(b.x,r.config.mirrored),contourHeight(b.x+b.w,r.config.mirrored))+eps);
  assert.ok(b.y>=b.palletIndex*PMC.length+8.5-eps);
  for(const p of b.touchedPallets)assert.ok(r.pallets[p].items.includes(b));
- if(b.z>0){const support=r.placements.find(x=>x.id===b.supportId);assert.ok(support?.stackable);assert.ok(Math.abs(support.z+support.h-b.z)<eps);assert.ok(b.x>=support.x-eps&&b.x+b.w<=support.x+support.w+eps);if(!b.reviewRequired)assert.ok(b.y>=support.y-eps&&b.y+b.l<=support.y+support.l+eps);}
+ if(b.z>0){
+ const supports=(b.supportIds||[b.supportId]).map(id=>r.placements.find(x=>x.id===id));
+ assert.ok(supports.length>0);
+ for(const support of supports){assert.ok(support?.stackable);assert.ok(Math.abs(support.z+support.h-b.z)<eps);assert.equal(support.palletIndex,b.palletIndex);}
+ if(!b.reviewRequired){
+  // Independent oracle: every elementary footprint cell must sit on a face.
+  const xs=[b.x,b.x+b.w,...supports.flatMap(s=>[Math.max(b.x,s.x),Math.min(b.x+b.w,s.x+s.w)])].sort((a,b)=>a-b);
+  const ys=[b.y,b.y+b.l,...supports.flatMap(s=>[Math.max(b.y,s.y),Math.min(b.y+b.l,s.y+s.l)])].sort((a,b)=>a-b);
+  for(let i=0;i<xs.length-1;i++)for(let j=0;j<ys.length-1;j++){
+   if(xs[i+1]-xs[i]<eps||ys[j+1]-ys[j]<eps)continue;
+   const x=(xs[i]+xs[i+1])/2,y=(ys[j]+ys[j+1])/2;
+   assert.ok(supports.some(s=>x>=s.x-eps&&x<=s.x+s.w+eps&&y>=s.y-eps&&y<=s.y+s.l+eps),`unsupported cell ${b.id}`);
+  }
+ }else{const support=supports[0];assert.ok(b.x>=support.x-eps&&b.x+b.w<=support.x+support.w+eps&&b.y>=support.y-eps);assert.ok(Math.abs(b.x-support.x)<eps||Math.abs(b.x-(support.x+support.w-b.w))<eps);assert.ok(Math.abs(b.y-support.y)<eps||Math.abs(b.y-(support.y+support.l-b.l))<eps);}
+ assert.equal(b.supportId,supports.length===1?supports[0].id:null);
+}
  else assert.equal(b.overhangCm,0);
  }
  for(let i=0;i<r.placements.length;i++)for(let j=i+1;j<r.placements.length;j++){
@@ -61,4 +77,73 @@ test('weight accounting distinguishes unknowns and kilograms',()=>{
 test('mixed 200-piece plans remain collision-free in both directions',()=>{
  const rows=Array.from({length:20},(_,i)=>row({id:`r${i}`,width:25+(i*17)%80,length:30+(i*19)%120,height:15+(i*7)%65,quantity:10,stackable:i%4!==0}));
  for(const mirrored of [false,true])invariant(runPacking(rows,{maxPallets:30,mirrored}));
+});
+
+const face=(id,x,y,w,l,extra={})=>({id,x,y,w,l,z:0,h:40,stackable:true,...extra});
+const footprint={x:8.5,y:8.5,z:40,w:100,l:120};
+test('coplanar support covers seams across width, length and four cartons',()=>{
+ for(const faces of [
+  [face('a',8.5,8.5,50,120),face('b',58.5,8.5,50,120)],
+  [face('a',8.5,8.5,100,60),face('b',8.5,68.5,100,60)],
+  [face('a',8.5,8.5,50,60),face('b',58.5,8.5,50,60),face('c',8.5,68.5,50,60),face('d',58.5,68.5,50,60)],
+ ]){const s=supportCoverage(footprint,faces);assert.equal(s.fullySupported,true);assert.deepEqual(s.supportIds,faces.map(f=>f.id));}
+});
+test('shared support rejects gaps, uneven tops, nonstackable faces and partial edge contact',()=>{
+ const left=face('left',8.5,8.5,50,120);
+ const right=face('right',58.5,8.5,50,120);
+ for(const faces of [
+  [left,{...right,x:58.6}],
+  [left,{...right,h:39.9}],
+  [left,{...right,h:40.1}],
+  [left,{...right,stackable:false}],
+  [left,{...right,y:8.6}],
+  [left,{...right,x:108.5}],
+  // Same total area, but repeated coverage of only half the footprint.
+  [left,{...left,id:'overlap'}],
+  // Supported corners and edges do not hide an interior hole.
+  [face('top',8.5,8.5,100,10),face('bottom',8.5,118.5,100,10),face('left',8.5,18.5,10,100),face('right',98.5,18.5,10,100)],
+ ])assert.equal(supportCoverage(footprint,faces).fullySupported,false,JSON.stringify(faces));
+});
+test('orange sample cartons compact across adjacent bases without unsupported gaps',()=>{
+ for(const mirrored of [false,true]){
+  const r=runPacking(SAMPLE_CARGO,{mirrored});invariant(r);
+  assert.equal(r.summary.placedCount,20);assert.equal(r.summary.palletCount,1);
+  const oranges=r.placements.filter(b=>b.rowId==='b');
+  assert.ok(oranges.some(b=>b.supportIds.length>1));
+  assert.ok(oranges.filter(b=>b.z===60).length>=8,'at least eight fit on first shared layer, previously only six');
+  assert.match(r.warnings.join(' '),/geometrik destektir/);
+  assert.match(r.warnings.join(' '),/yük taşıma kapasitesi hesaplanmaz/);
+ }
+});
+test('a wide carton bridges adjacent supported bases but never a nonstackable face',()=>{
+ const rows=[row({id:'base',width:100,length:300.5,height:50,quantity:2,allowRotation:false}),row({id:'bridge',width:200,length:300.5,height:10,allowRotation:false,stackable:false})];
+ for(const mirrored of [false,true]){
+  const r=runPacking(rows,{maxPallets:1,mirrored});invariant(r);
+  assert.equal(r.summary.placedCount,3);
+  const bridge=r.placements.find(b=>b.rowId==='bridge');assert.equal(bridge.z,50);assert.equal(bridge.supportIds.length,2);assert.equal(bridge.supportId,null);assert.equal(bridge.reviewRequired,false);
+ }
+ const no=runPacking([{...rows[0],stackable:false},rows[1]],{maxPallets:1});invariant(no);assert.ok(no.summary.unplacedCount>0);assert.ok(no.placements.every(b=>b.z===0));
+});
+test('shared support preserves contour, collision and floor boundaries in varied mixed plans',()=>{
+ let seed=1147;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/2**32;};
+ for(let scenario=0;scenario<12;scenario++){
+  const rows=Array.from({length:5},(_,i)=>row({id:`mixed-${i}`,width:25+Math.floor(random()*95),length:25+Math.floor(random()*140),height:20+Math.floor(random()*80),quantity:4,stackable:random()>.2,allowRotation:random()>.2}));
+  invariant(runPacking(rows,{maxPallets:3,mirrored:scenario%2===1}));
+ }
+});
+
+test('shared contact does not enable a new partial-support overhang',()=>{
+ const rows=[row({id:'narrow-base',width:100,length:300.5,height:100,quantity:2,allowRotation:false}),row({id:'overhang',width:200,length:340,height:10,allowRotation:false})];
+ const r=runPacking(rows,{allowOverhang:true,maxOverhangCm:50,minOverhangHeightCm:100,maxPallets:2});invariant(r);
+ assert.equal(r.summary.placedCount,2);assert.equal(r.summary.overhangCount,0);
+ assert.equal(r.unplaced[0].rowId,'overhang');
+});
+test('100 mixed rows / 200 small pieces return before the UI worker timeout',()=>{
+ const source=`import {runPacking} from ${JSON.stringify(new URL('../src/pmc-engine.mjs',import.meta.url).href)};
+ const rows=Array.from({length:100},(_,i)=>({id:'r'+i,width:10+(i*17)%30+i/101,length:10+(i*19)%40+i/103,height:10,quantity:2,stackable:true}));
+ const result=runPacking(rows,{maxPallets:30});console.log(JSON.stringify(result.summary));`;
+ const child=spawnSync(process.execPath,['--input-type=module','-e',source],{encoding:'utf8',timeout:30000});
+ assert.equal(child.error,undefined,child.error?.message);
+ assert.equal(child.status,0,child.stderr);
+ const summary=JSON.parse(child.stdout);assert.equal(summary.placedCount,200);assert.equal(summary.unplacedCount,0);
 });
