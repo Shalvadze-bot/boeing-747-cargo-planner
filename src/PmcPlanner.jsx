@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Cube, Plus, Trash, MagicWand, DownloadSimple, Warning, Info, ArrowCounterClockwise, CheckCircle, X } from '@phosphor-icons/react';
 import { DEFAULT_CONFIG, SAMPLE_CARGO, PMC, contourHeight } from './pmc-engine.mjs';
 import PmcScene from './PmcScene';
+import {preparePmcTransfer} from './pmc-aircraft.mjs';
 import CargoImport from './CargoImport';
 import './pmc-planner.css';
 
@@ -30,7 +31,9 @@ function restore() {
   return { rows: freshRows(), config: { ...DEFAULT_CONFIG } };
 }
 
-export default function PmcPlanner() {
+export default function PmcPlanner({onImportAircraft}) {
+  const [transfer,setTransfer] = useState(null);
+  const [transferError,setTransferError] = useState('');
   const [initial] = useState(restore);
   const [rows, setRows] = useState(initial.rows);
   const [config, setConfig] = useState(initial.config);
@@ -70,21 +73,21 @@ export default function PmcPlanner() {
     return () => { worker.current?.terminate(); clearTimeout(timeout.current); };
   }, []);
   useEffect(() => {
-    if (!resetOpen) return;
-    const box = document.querySelector('.pmc-reset-dialog');
+    if (!resetOpen && !transfer) return;
+    const box = document.querySelector('.pmc-reset-dialog, .pmc-transfer-dialog');
     const previous = document.activeElement;
     box?.querySelector('button')?.focus();
     const listener = event => {
-      if (event.key === 'Escape') setResetOpen(false);
+      if (event.key === 'Escape') {setResetOpen(false);setTransfer(null);}
       if (event.key === 'Tab') {
-        const buttons = [...box.querySelectorAll('button')];
+        const buttons = [...box.querySelectorAll('button,input')];
         if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
         else if (!event.shiftKey && document.activeElement === buttons.at(-1)) { event.preventDefault(); buttons[0]?.focus(); }
       }
     };
     document.addEventListener('keydown', listener);
     return () => { document.removeEventListener('keydown', listener); previous?.focus(); };
-  }, [resetOpen]);
+  }, [resetOpen,transfer]);
 
   function stop() { worker.current?.terminate(); worker.current = null; clearTimeout(timeout.current); setBusy(false); }
   function calculate(nextRows = rows, nextConfig = config) {
@@ -119,6 +122,8 @@ export default function PmcPlanner() {
     }
     setRows(next); setError(''); return true;
   }
+  function openTransfer(){try{setTransferError('');setTransfer(preparePmcTransfer(result));}catch(cause){setError(cause.message);}}
+  function submitTransfer(event){event.preventDefault();if(stale || busy || !result){setTransferError('PMC girdileri değişti. Kapatıp yeniden hesaplayın.');return;}try{const form=new FormData(event.currentTarget);onImportAircraft(result,transfer.map(p=>Number(form.get('weight-'+p.index))));setTransfer(null);}catch(cause){setTransferError(cause.message);}}
   function download() {
     if (!result || stale || result.errors?.length) return;
     const payload = { version: 1, label: 'SİMÜLASYON — UÇUŞ OPERASYONLARI İÇİN ONAYLI DEĞİLDİR', generatedAt: new Date().toISOString(), input: { rows, config }, result };
@@ -156,6 +161,7 @@ export default function PmcPlanner() {
           <div className="panel-heading"><div><h2>02 <span>3D palet planı</span></h2><p>Bir paleti seçerek büyük görün · Parçaya tıklayarak ölçülerini incele</p></div><button className="text-btn" onClick={download} disabled={!result || stale || busy || !!result.errors?.length}><DownloadSimple size={17}/> JSON indir</button></div>
           {stale && <div className="pmc-stale" role="status"><Warning size={17}/> Girdiler değişti. Görünüm önceki hesaplamayı gösteriyor; yeniden yerleştirin.</div>}
           <div className="pmc-results-stats"><div><span>Kullanılan palet</span><strong>{palletCount}<small> PMC</small></strong></div><div><span>Yerleşen parça</span><strong>{placements.length}<small> / {result?.summary?.requestedCount ?? totalRequested}</small></strong></div><div><span>Yerleşen hacim</span><strong>{format(volume, 2)}<small> m³</small></strong></div><div title="Net taban üzerindeki ZX-11 geometrik zarfına oran. Kenar boşluklarına taşan hacim dahil değildir."><span>Geometrik zarf doluluğu</span><strong>{format(utilization, 1)}<small>%</small></strong></div><div><span>Üst taşma</span><strong className={overhangs.length ? 'pmc-amber-text' : ''}>{overhangs.length}<small> inceleme</small></strong></div></div>
+          {onImportAircraft && <div className="pmc-aircraft-transfer"><button className="outline amber" disabled={!result || stale || busy || !!result.errors?.length || !placements.length} onClick={openTransfer}>Uçak paletlerine ekle</button><p>Renkli yükler uçak 3D görünümüne kopyalanır. Mevcut yükler korunur; sonraki PMC düzenlemeleri kopyayı değiştirmez.</p></div>}
           <div className="pmc-pallet-select" aria-label="Görüntülenecek palet"><button className={selectedPallet === null ? 'active' : ''} onClick={() => { setSelectedPallet(null); setSelectedItemId(null); }}>Tüm paletler</button>{(result?.pallets || []).map(pallet => <button key={pallet.index} className={selectedPallet === pallet.index ? 'active' : ''} onClick={() => { setSelectedPallet(pallet.index); setSelectedItemId(null); }}><Cube size={17}/><span>PMC {String(pallet.index + 1).padStart(2, '0')}<small>{pallet.items.length} parça teması</small></span></button>)}</div>
           <div className="pmc-view-options"><label className="pmc-checkbox"><input type="checkbox" checked={showContour} onChange={e => setShowContour(e.target.checked)}/> Kontur</label><label className="pmc-checkbox"><input type="checkbox" checked={labels} onChange={e => setLabels(e.target.checked)}/> Etiketler</label><label className="pmc-layer">Katman üst sınırı <input aria-label="Katman üst sınırı" type="range" min="0" max="244" step="1" value={heightCut} onChange={e => setHeightCut(Number(e.target.value))}/><b>{heightCut === 244 ? 'Tümü' : `${heightCut} cm`}</b></label></div>
           {result ? <PmcScene placements={placements} palletCount={Math.max(1, palletCount)} selectedPallet={selectedPallet} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} mirrorContour={!!configForResult.mirrored} showContour={showContour} labels={labels} heightCut={heightCut === 244 ? Infinity : heightCut}/> : <div className="pmc-loading"><Cube size={48}/><p>{busy ? 'Paletler hazırlanıyor…' : 'Yüklerinizi girip yerleşimi hesaplayın.'}</p></div>}
@@ -167,6 +173,7 @@ export default function PmcPlanner() {
         <div className="pmc-bottom"><span><CheckCircle size={16}/> Mevcut uçak yerleşim planınız ayrı olarak korunur.</span><button className="text-btn" onClick={() => setResetOpen(true)}><ArrowCounterClockwise size={16}/> Örnek yükleri getir</button></div>
       </div>
     </div>
+    {transfer && <div className="overlay" onClick={()=>setTransfer(null)}><section className="dialog pmc-transfer-dialog" role="dialog" aria-modal="true" aria-label="PMC paletlerini uçağa ekle" onClick={e=>e.stopPropagation()}><button className="close" aria-label="Kapat" onClick={()=>setTransfer(null)}><X size={20}/></button><h2>PMC paletlerini uçağa ekle</h2><p>Her paletin palet dahil brüt ağırlığını girin. Mevcut yerleşimler ve kilitler korunur. Uygun boş örnek pozisyonlara yerleştirilir; sığmayanlar bekleyen listesine eklenir.</p><form onSubmit={submitTransfer}>{transfer.map(p=><label key={p.index}>PMC {p.index+1} · Brüt ağırlık (kg)<small>{p.unknownWeight?'Bazı parça ağırlıkları bilinmiyor. ':''}Bilinen yük: {format(p.knownWeight)} kg; palet darası dahil değil.</small><input name={'weight-'+p.index} aria-label={`PMC ${p.index+1} brüt ağırlık`} type="number" min={Math.max(.01,p.knownWeight)} step="any" required/></label>)}{transferError&&<p role="alert">{transferError}</p>}<p>Şematik simülasyon; uçak uygunluğu, bağlama ve gerçek ağırlık merkezi onayı değildir.</p><button className="primary" type="submit">Ekle ve uçakta göster</button><button type="button" className="text-btn" onClick={()=>setTransfer(null)}>Vazgeç</button></form></section></div>}
     {resetOpen && <div className="overlay" onClick={() => setResetOpen(false)}><section className="dialog pmc-reset-dialog" role="dialog" aria-modal="true" aria-label="Örnek yükleri getir" onClick={e => e.stopPropagation()}><button className="close" aria-label="Kapat" onClick={() => setResetOpen(false)}><X size={20}/></button><h2>Örnek yükleri yeniden getir?</h2><p>PMC yük listeniz ve kontur ayarlarınız örnek değerlere döner. Uçak yerleşim planınız değişmez.</p><button className="primary" onClick={() => { const nextRows = freshRows(); const nextConfig = { ...DEFAULT_CONFIG }; setRows(nextRows); setConfig(nextConfig); setResetOpen(false); calculate(nextRows, nextConfig); }}>Örnek yükleri getir</button><button className="text-btn" onClick={() => setResetOpen(false)}>Vazgeç</button></section></div>}
   </section>;
 }

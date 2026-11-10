@@ -4,6 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {buildAircraft, applyDeckVisibility} from './aircraft-geometry.mjs';
 import {slots} from './engine.mjs';
+import {pmcBoxTransforms} from './pmc-aircraft.mjs';
 import './aircraft-scene.css';
 
 const PRESETS = {
@@ -87,7 +88,13 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
           const color=chosen?0xfacc15:state.locked.includes(slot.id)?0xa78bfa:item?0x38bdf8:0x64748b;
           const bay=new THREE.Mesh(new THREE.BoxGeometry(main?7.3:14.2,.08,2.3),new THREE.MeshBasicMaterial({color,transparent:true,opacity:active?.36:.12}));
           bay.position.set(x,y,z);bay.userData.slot=slot.id;group.add(bay);targets.push(bay);
-          if(item){
+          if(item?.pmc?.items?.length){
+            for(const box of pmcBoxTransforms(item,{x,y,z,maxLength:main?6.5:12.8,maxWidth:2.05,maxHeight:main?1.85:1.25})){
+              const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color||'#38bdf8',roughness:.65,transparent:true,opacity:active?1:.35}));
+              mesh.position.set(...box.position);mesh.userData.slot=slot.id;group.add(mesh);targets.push(mesh);
+              mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:chosen?0xfacc15:0xffffff,transparent:true,opacity:chosen?.9:.35})));
+            }
+          }else if(item){
             const height=main?1.85:1.25;
             const mesh=new THREE.Mesh(new THREE.BoxGeometry(main?6.5:12.8,height,2.05),new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.32,transparent:true,opacity:active?1:.35}));
             mesh.position.set(x,y+height/2+.06,z);mesh.userData.slot=slot.id;group.add(mesh);targets.push(mesh);

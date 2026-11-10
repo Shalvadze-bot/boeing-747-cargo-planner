@@ -7,3 +7,5 @@
 @media(max-width:1100px) and (min-width:521px){.pmc-results-stats>div{padding:0 10px}.pmc-results-stats span{font-size:9px}.pmc-results-stats strong{font-size:22px}}
 
 .pmc-import-panel{margin-bottom:18px}.pmc-import-panel>summary{padding:17px 22px;color:#e9c16c;cursor:pointer;font-size:12px}.pmc-import-panel .cargo-import{margin:0 14px 14px}
+
+.pmc-aircraft-transfer{padding:16px 22px;display:flex;align-items:center;gap:16px}.pmc-aircraft-transfer p{font-size:11px;line-height:1.6;color:#9ab0c8}.pmc-aircraft-transfer button{flex-shrink:0}.pmc-transfer-dialog{max-height:85dvh;overflow:auto}.pmc-transfer-dialog label small{display:block;font-size:11px;line-height:1.5;color:#9ab0c8;margin:6px 0}@media(max-width:600px){.pmc-aircraft-transfer{align-items:stretch;flex-direction:column}}
