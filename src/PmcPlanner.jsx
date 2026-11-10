@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Cube, Plus, Trash, MagicWand, DownloadSimple, Warning, Info, ArrowCounterClockwise, CheckCircle, X } from '@phosphor-icons/react';
 import { DEFAULT_CONFIG, SAMPLE_CARGO, PMC, contourHeight } from './pmc-engine.mjs';
 import PmcScene from './PmcScene';
+import CargoImport from './CargoImport';
 import './pmc-planner.css';
 
 const STORE = 'cargo-pmc-v1';
@@ -19,9 +20,9 @@ const freshRows = () => SAMPLE_CARGO.map((row, i) => ({ ...row, color: COLORS[i 
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE));
-    if (saved?.version === 1 && Array.isArray(saved.rows) && saved.rows.length <= 40 && saved.config && typeof saved.config === 'object') {
+    if (saved?.version === 1 && Array.isArray(saved.rows) && saved.rows.length <= 100 && saved.config && typeof saved.config === 'object') {
       const ids = saved.rows.map(row => row?.id);
-      if (ids.every(id => typeof id === 'string' && id.length < 80) && new Set(ids).size === ids.length) {
+      if (ids.every(id => typeof id === 'string' && id.length < 80) && new Set(ids).size === ids.length && saved.rows.every(row => typeof row.name === 'string' && row.name.length <= 60 && ['length','width','height','quantity','weight'].every(key => row[key] == null || typeof row[key] === 'number' || typeof row[key] === 'string') && typeof row.stackable === 'boolean' && typeof row.allowRotation === 'boolean')) {
         return { rows: saved.rows, config: { ...DEFAULT_CONFIG, ...saved.config } };
       }
     }
@@ -106,7 +107,17 @@ export default function PmcPlanner() {
   function updateRow(id, key, value) { setRows(previous => previous.map(row => row.id === id ? { ...row, [key]: value } : row)); }
   function updateConfig(key, value) { setConfig(previous => ({ ...previous, [key]: value })); }
   function addRow() {
-    setRows(previous => [...previous, { id: `K${String(Math.max(0, ...previous.map(row => Number(row.id.match(/^K(\d+)$/)?.[1]) || 0)) + 1).padStart(2, '0')}`, name: `Yük ${previous.length + 1}`, length: 100, width: 80, height: 60, quantity: 1, weight: '', stackable: false, allowRotation: true, color: nextColor(previous.length) }]);
+    setRows(previous => [...previous, { id: `K${String(Math.max(0, ...previous.map(row => Number(row.id.match(/^K(\d+)$/)?.[1]) || 0)) + 1).padStart(2, '0')}`, name: `Yük ${previous.length + 1}`, length: 100, width: 80, height: 60, quantity: 1, weight: '', stackable: false, allowRotation: true, color: Array.from({length:200}, (_, i) => nextColor(i)).find(color => !previous.some(row => row.color === color)) || nextColor(previous.length) }]);
+  }
+  function importRows(incoming) {
+    if (rows.length + incoming.length > 100) { setError('Yük listesi en fazla 100 satır olabilir. Önce mevcut satırları azaltın.'); return false; }
+    const next = [...rows];
+    let maxId = Math.max(0, ...next.map(row => Number(row.id.match(/^K(\d+)$/)?.[1]) || 0));
+    for (const item of incoming) {
+      const color = Array.from({length:200}, (_, i) => nextColor(i)).find(candidate => !next.some(row => row.color === candidate)) || nextColor(next.length);
+      next.push({...item, id: `K${String(++maxId).padStart(2,'0')}`, color});
+    }
+    setRows(next); setError(''); return true;
   }
   function download() {
     if (!result || stale || result.errors?.length) return;
@@ -134,11 +145,12 @@ export default function PmcPlanner() {
       </aside>
       <div className="pmc-main">
         <section className="pmc-input-panel panel">
-          <div className="panel-heading"><div><h2>01 <span>Yük listesi</span></h2><p>Her yük grubuna ayrı renk · Tüm ölçüler cm</p></div><button className="outline amber" onClick={addRow} disabled={rows.length >= 40}><Plus size={17}/> Yük ekle</button></div>
-          <div className="pmc-table-scroll"><table className="pmc-input-table"><thead><tr><th>Yük / renk</th><th>Uzunluk</th><th>Genişlik</th><th>Yükseklik</th><th>Adet</th><th>kg / parça</th><th>90° çevir</th><th>Üstüne yük</th><th><span className="pmc-sr-only">Sil</span></th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id}><td><div className="pmc-name-input"><input aria-label={`Yük ${index + 1} rengi`} type="color" value={/^#[0-9a-f]{6}$/i.test(row.color) ? row.color : COLORS[index % COLORS.length]} onChange={e => updateRow(row.id, 'color', e.target.value)}/><input aria-label={`Yük ${index + 1} adı`} value={row.name} maxLength="60" onChange={e => updateRow(row.id, 'name', e.target.value)}/></div></td>{[['length','uzunluk'],['width','genişlik'],['height','yükseklik'],['quantity','adet'],['weight','ağırlık']].map(([key, label]) => <td key={key}><input aria-label={`Yük ${index + 1} ${label}`} type="number" min={key === 'quantity' ? 1 : 0.01} step={key === 'quantity' ? 1 : 'any'} placeholder={key === 'weight' ? 'İsteğe bağlı' : ''} value={row[key] ?? ''} onChange={e => updateRow(row.id, key, e.target.value)}/></td>)}<td><input type="checkbox" aria-label={`Yük ${index + 1} tabanda döndürülebilir`} checked={row.allowRotation} onChange={e => updateRow(row.id, 'allowRotation', e.target.checked)}/></td><td><input type="checkbox" aria-label={`Yük ${index + 1} üstüne yük konabilir`} checked={row.stackable} onChange={e => updateRow(row.id, 'stackable', e.target.checked)}/></td><td><button className="pmc-icon-button" aria-label={`Yük ${index + 1} sil`} onClick={() => setRows(previous => previous.filter(item => item.id !== row.id))}><Trash size={17}/></button></td></tr>)}</tbody></table></div>
+          <div className="panel-heading"><div><h2>01 <span>Yük listesi</span></h2><p>Her yük grubuna ayrı renk · Tüm ölçüler cm · En fazla 200 parça</p></div><button className="outline amber" onClick={addRow} disabled={rows.length >= 100}><Plus size={17}/> Yük ekle</button></div>
+          <div className="pmc-table-scroll"><table className="pmc-input-table"><thead><tr><th>Yük / renk</th><th>Uzunluk</th><th>Genişlik</th><th>Yükseklik</th><th>Adet</th><th>kg / parça</th><th title="Yalnızca tabanda 90° döndürür; yükseklik ve dik konum korunur.">90° çevir</th><th title="İşaretli yük başka bir parçayı üstünde taşıyabilir. Ezilme dayanımı hesaplanmaz.">Üstüne yük</th><th><span className="pmc-sr-only">Sil</span></th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id}><td><div className="pmc-name-input"><input aria-label={`Yük ${index + 1} rengi`} type="color" value={/^#[0-9a-f]{6}$/i.test(row.color) ? row.color : COLORS[index % COLORS.length]} onChange={e => updateRow(row.id, 'color', e.target.value)}/><input aria-label={`Yük ${index + 1} adı`} value={row.name} maxLength="60" onChange={e => updateRow(row.id, 'name', e.target.value)}/></div></td>{[['length','uzunluk'],['width','genişlik'],['height','yükseklik'],['quantity','adet'],['weight','ağırlık']].map(([key, label]) => <td key={key}><input aria-label={`Yük ${index + 1} ${label}`} type="number" min={key === 'quantity' ? 1 : 0.01} step={key === 'quantity' ? 1 : 'any'} placeholder={key === 'weight' ? 'İsteğe bağlı' : ''} value={row[key] ?? ''} onChange={e => updateRow(row.id, key, e.target.value)}/></td>)}<td><input type="checkbox" aria-label={`Yük ${index + 1} tabanda döndürülebilir`} checked={row.allowRotation} onChange={e => updateRow(row.id, 'allowRotation', e.target.checked)}/></td><td><input type="checkbox" aria-label={`Yük ${index + 1} üstüne yük konabilir`} checked={row.stackable} onChange={e => updateRow(row.id, 'stackable', e.target.checked)}/></td><td><button className="pmc-icon-button" aria-label={`Yük ${index + 1} sil`} onClick={() => setRows(previous => previous.filter(item => item.id !== row.id))}><Trash size={17}/></button></td></tr>)}</tbody></table></div>
           {!rows.length && <p className="pmc-empty-input">Başlamak için bir yük ekleyin.</p>}
           <div className="pmc-input-footer"><span><b>{rows.length}</b> yük grubu · <b>{format(totalRequested, 0)}</b> parça<small>{saved ? 'Girdiler bu tarayıcıda kaydedilir.' : 'Tarayıcı kaydı kullanılamıyor.'}</small></span><div>{busy && <button onClick={stop}>İptal</button>}<button className="primary" disabled={busy || !rows.length} onClick={() => calculate()}><MagicWand size={21}/>{busy ? 'Yerleşim hesaplanıyor…' : 'Paletlere yerleştir'}</button></div></div>
         </section>
+        <details className="panel pmc-import-panel"><summary>Fotoğraf veya PDF’den yük listesi aktar</summary><CargoImport onImport={importRows}/></details>
         {(error || result?.errors?.length > 0) && <div className="pmc-errors" role="alert"><Warning size={21}/><div>{error && <p>{error}</p>}{result?.errors?.map((item, i) => <p key={i}>{typeof item === 'string' ? item : item.message || JSON.stringify(item)}</p>)}</div></div>}
         <section className="pmc-output panel" aria-busy={busy}>
           <div className="panel-heading"><div><h2>02 <span>3D palet planı</span></h2><p>Bir paleti seçerek büyük görün · Parçaya tıklayarak ölçülerini incele</p></div><button className="text-btn" onClick={download} disabled={!result || stale || busy || !!result.errors?.length}><DownloadSimple size={17}/> JSON indir</button></div>

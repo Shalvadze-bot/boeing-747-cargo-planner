@@ -32,7 +32,7 @@ function validate(rows,config){
  rows.forEach((r,i)=>{
  if(!r||typeof r!=='object'){errors.push(`${i+1}. satır geçersiz.`);return;}
  const id=String(r.id??`row-${i+1}`);if(ids.has(id))errors.push(`${i+1}. satır: yük kimliği tekrarlanıyor.`);ids.add(id);
- for(const k of ['length','width','height'])if(!positive(r[k]))errors.push(`${i+1}. satır ${k}: pozitif sonlu sayı gerekli.`);
+ for(const k of ['length','width','height'])if(!positive(r[k]))errors.push(`${i+1}. satır ${{length:'uzunluk',width:'genişlik',height:'yükseklik'}[k]}: pozitif sonlu sayı gerekli.`);
  if(!Number.isInteger(r.quantity)||r.quantity<1||r.quantity>200)errors.push(`${i+1}. satır: adet 1–200 arasında tam sayı olmalı.`);else count+=r.quantity;
  if(r.weight!=null&&!positive(r.weight))errors.push(`${i+1}. satır: birim ağırlık pozitif sonlu sayı olmalı.`);
  for(const k of ['stackable','allowRotation'])if(r[k]!=null&&typeof r[k]!=='boolean')errors.push(`${i+1}. satır ${k}: doğru/yanlış değeri gerekli.`);

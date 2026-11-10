@@ -74,3 +74,34 @@ node --test tests/engine.test.mjs tests/sites-worker.test.mjs tests/pages-build.
 ```
 
 Varsayılan `npm run build`, mevcut Sites uygulaması için kök (`/`) yolunu korur. GitHub Pages yayını Sites uygulamasını değiştirmez.
+
+## PMC 3D paletleme
+
+`PMC · 3D paletleme` sekmesi mevcut uçak yerleşiminden bağımsız çalışır ve uçak planını değiştirmez.
+
+- Fiziksel taban: 96 × 125 inç = 243,84 × 317,5 cm. Her kenardaki 8,5 cm boşluk çıkarıldığında net taban **226,84 × 300,5 cm** olur.
+- ZX-11 geometrisi kullanıcının sağladığı çizimden alınmıştır: 96 inç tepe, 39,5 inç düz üst bölüm, 56,5 inç eğim yatay açıklığı ve 41 inç alçak kenar. Kontur fiziksel plaka eksenindedir; iki yön için aynalanabilir. Bu veri sertifikalı Boeing veya operatör profili değildir.
+- Her yük satırında parça adı, uzunluk, genişlik, yükseklik, adet, isteğe bağlı birim ağırlık ve ayrı renk bulunur. `90° çevir` yalnızca tabandaki dönüşe izin verir; yük devrilmez. `Üstüne yük` o parçanın başka bir parçaya destek olmasına izin verir; ezilme dayanımı hesabı değildir.
+- Sezgisel arama üç farklı sıralamayı karşılaştırır. Normal istifler tek bir istiflenebilir parça üzerinde tam taban desteği ister; birden fazla kutunun ortak desteği modellenmez. En iyi yerleşim veya minimum palet sayısı garanti edilmez.
+- Çoklu palet görünümü, tek palet yakın görünümü, kamera dönüşü/yakınlaştırma, katman kesiti, parça seçimi, koordinatlar ve JSON dışa aktarma vardır. Girdi değişince önceki plan işaretlenir, yeniden hesaplanmadan dışa aktarılamaz.
+- Geometrik doluluk: net taban üzerindeki ZX-11 zarfına oran. Kenar boşluklarındaki taşma hacmi doluluk payına eklenmez. Ağırlık yalnızca bilgilendirme verisidir; ağırlık, CG, taban basıncı ve bağlama limitleri uygulanmaz.
+- Üst taşma varsayılan kapalıdır. Azami taşma ve asgari başlangıç yüksekliği kullanıcı tarafından verilmelidir. Yalnızca sonraki boyuna palete taşma denenir, komşu palet hacmi ayrılır ve çakışmalar engellenir. Kısmi destek, sehim, devrilme, ağırlık aktarımı veya operasyon izni doğrulanmaz. Taşan her parça inceleme gerektirir.
+- Etkileşimli sürüm bir hesapta 100 yük satırı / 200 parça destekler; arayüzde en fazla 20 palet seçilir.
+
+### Fotoğraf / PDF aktarımı
+
+Belge tarayıcıda işlenir; dosya veya çıkarılan metin sunucuya ya da bir AI hizmetine gönderilmez. PDF metni PDF.js ile, görsel metni Tesseract.js ile okunur. Tarama veya karışık PDF'lerde `PDF sayfalarını OCR ile oku` seçeneği kullanılabilir. Çalışan dosyalar ve İngilizce/rakam odaklı OCR verisi uygulamayla aynı kaynaktan yüklenir; ilk OCR okuması ek indirme gerektirir.
+
+Desteklenenler: PDF (en fazla 8 sayfa), PNG, JPEG, WebP; 15 MB dosya ve 12 MP görsel sınırı. Otomatik çıkarım `120 × 80 × 60 cm`, `qty: 3` / `3 adet` gibi açık ölçü üçlüleri ve adet etiketlerini tanır. Ayrı tablo sütunları, el yazısı ve düşük kaliteli görüntüler doğru okunmayabilir. Ham metin ve aday satırlar düzenlenebilir. Her satırda ölçü sırası, birim, adet ve değerler kontrol edilmeden, kullanıcı inceleme kutusunu işaretleyip `Listeye ekle` demeden yük listesine aktarılmaz. Eksik satırlar için elle aday eklenebilir. İçe alınan yüklerde ağırlık bilinmiyor, dönüş ve istif izni kapalı başlar.
+
+OCR sonucunun eksiksiz veya doğru olduğu garanti edilmez. Gerçek yükleme öncesinde kaynak belge ve onaylı uçak/operatör verileriyle ayrıca doğrulayın.
+
+### Kontroller
+
+```sh
+npm ci
+VITE_BASE_PATH=/boeing-747-cargo-planner/ npm run build
+node --test tests/*.test.mjs
+```
+
+`npm run dev` ve `npm run build`, OCR varlıklarını bağımlılıklardan `public/ocr` altına hazırlar; bu üretilen klasör Git'e eklenmez. PR doğrulama iş akışı yalnızca derleme ve test yapar, yayın yapmaz. `main` iş akışı tüm testleri geçtikten sonra GitHub Pages'e yayın yapar.

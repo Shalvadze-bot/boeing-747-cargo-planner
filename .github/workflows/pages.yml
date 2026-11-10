@@ -18,12 +18,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/engine.test.mjs
       - run: npm run build
         env:
           VITE_BASE_PATH: /boeing-747-cargo-planner/
-      - run: npm run test:sites
-      - run: node --test tests/pages-build.test.mjs
+      - run: node --test tests/*.test.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist/client
