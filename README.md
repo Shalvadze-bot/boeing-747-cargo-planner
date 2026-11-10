@@ -75,6 +75,14 @@ node --test tests/engine.test.mjs tests/sites-worker.test.mjs tests/pages-build.
 
 Varsayılan `npm run build`, mevcut Sites uygulaması için kök (`/`) yolunu korur. GitHub Pages yayını Sites uygulamasını değiştirmez.
 
+## Döndürülebilir 3D uçak görünümü
+
+Uçak çalışma alanı açılışta `3D uçak` görünümünü gösterir. Sürükleyerek uçağın çevresinde dönebilir, yakınlaştırabilir ve kamera açılarını değiştirebilirsiniz. `Üstten` ve `Dağılım` görünümleri ile PMC çalışma alanı korunur; uçak görünümleri aynı yük listesini, yerleşimi ve sabitleme kontrollerini kullanır.
+
+Uçak geometrisi ilk Sites uygulamasının 2. sürümündeki `ThreeCargoDigitalTwin.tsx` dosyasından geri alınmıştır (kaynak commit: `ff2cbef8ffb36e9041f242c6f10af0f1eb1f5b3d`). GitHub kaynak kopyasında daha eski `App.jsx` girişi bulunduğu için bu 3D görünüm eksikti. Yalnızca görsel model ve kamera davranışları taşınmıştır; eski uygulamanın ayrı yük listesi, örnek uçak CG hesabı ve farklı limitleri mevcut plana uygulanmaz.
+
+3D model ve pozisyonlar şematiktir, ölçekli teknik model veya operasyon onayı değildir. WebGL kullanılamıyorsa `Üstten` görünümü ile planlamaya devam edilebilir. Tarayıcıdaki mevcut uçak ve PMC kayıtları değiştirilmez.
+
 ## PMC 3D paletleme
 
 `PMC · 3D paletleme` sekmesi mevcut uçak yerleşiminden bağımsız çalışır ve uçak planını değiştirmez.
