@@ -8,3 +8,6 @@ dist/
 coverage/
 .sites-checkout*/
 *.tar.gz
+
+# Reproducibly staged by predev/prebuild
+public/ocr/
