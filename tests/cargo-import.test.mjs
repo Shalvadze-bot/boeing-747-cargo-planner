@@ -50,3 +50,13 @@ test('tables reject incompatible columns, terminate at prose, and never duplicat
 });
 
 test('uppercase English and Turkish headers stay recognized',()=>{for(const header of ['LENGTH WIDTH HEIGHT QTY','UZUNLUK GENİŞLİK YÜKSEKLİK ADET'])assert.equal(parseCargoText(`${header}\n120 80 60 4`).length,1);});
+
+
+test('PDF.js loading-task cleanup preserves successful extraction and original errors', async () => {
+  const { disposePdfLoadingTask } = await import('../src/cargo-document-reader.mjs');
+  let destroyed = 0;
+  await disposePdfLoadingTask({ destroy: async () => { destroyed++; } });
+  assert.equal(destroyed, 1);
+  await assert.doesNotReject(() => disposePdfLoadingTask({ destroy: async () => { throw new Error('cleanup'); } }));
+  await assert.doesNotReject(() => disposePdfLoadingTask(undefined));
+});
