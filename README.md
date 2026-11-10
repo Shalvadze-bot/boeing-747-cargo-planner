@@ -85,7 +85,7 @@ Uçak geometrisi ilk Sites uygulamasının 2. sürümündeki `ThreeCargoDigitalT
 
 ## PMC 3D paletleme
 
-`PMC · 3D paletleme` sekmesi mevcut uçak yerleşiminden bağımsız çalışır ve uçak planını değiştirmez.
+`PMC · 3D paletleme` sekmesi mevcut uçak yerleşiminden bağımsız hesaplanır. Uçak planı yalnızca **Uçak paletlerine ekle** işlemini onayladığınızda yeni kopyalarla genişletilir.
 
 - Fiziksel taban: 96 × 125 inç = 243,84 × 317,5 cm. Her kenardaki 8,5 cm boşluk çıkarıldığında net taban **226,84 × 300,5 cm** olur.
 - ZX-11 geometrisi kullanıcının sağladığı çizimden alınmıştır: 96 inç tepe, 39,5 inç düz üst bölüm, 56,5 inç eğim yatay açıklığı ve 41 inç alçak kenar. Kontur fiziksel plaka eksenindedir; iki yön için aynalanabilir. Bu veri sertifikalı Boeing veya operatör profili değildir.
@@ -113,3 +113,11 @@ node --test tests/*.test.mjs
 ```
 
 `npm run dev` ve `npm run build`, OCR varlıklarını bağımlılıklardan `public/ocr` altına hazırlar; bu üretilen klasör Git'e eklenmez. PR doğrulama iş akışı yalnızca derleme ve test yapar, yayın yapmaz. `main` iş akışı tüm testleri geçtikten sonra GitHub Pages'e yayın yapar.
+
+### PMC paletlerini uçakta görüntüleme
+
+Güncel PMC hesaplamasının altında **Uçak paletlerine ekle** düğmesini kullanın. Her palet için palet darası dahil brüt ağırlığı girip **Ekle ve uçakta göster** seçin. Bilinen parça ağırlıkları yalnızca alt sınırdır; eksik ağırlıklar sıfır kabul edilmez.
+
+Hesaplanan kutu ölçüleri, konumları ve renkleri ULD listesine bir kopya olarak eklenir ve 3D uçakta gösterilir. Mevcut paletler, yerleşimler ve kilitler korunur. Yalnızca mevcut örnek ölçü/ağırlık kontrollerini geçen boş pozisyonlar kullanılır; yer bulunamayan paletler bekler. Aynı hesaplama ikinci kez eklenmez. Sonraki PMC düzenlemeleri aktarılmış kopyaları değiştirmez. Komşu palete üst taşma olan hesaplamalar, birbirinden bağımsız uçak pozisyonlarına taşınamaz; önce taşmayı kapatıp yeniden hesaplayın.
+
+Bu aktarım operasyon onayı değildir. Kutuların en-boy-yükseklik oranları korunur ancak uçak pozisyonlarının şematik ölçeğine küçültülür. Ağırlık merkezi, zemin, bağlama veya gerçek uçak konturu uygunluğu doğrulanmaz. Telefonlarda ULD listesini parmağınızla kaydırın; bir paleti seçip boş pozisyona dokunarak yerleştirin. Fareyle sürükleme korunur.
