@@ -3,10 +3,14 @@ export function checkFile(file) {
   if (!file || file.size > LIMITS.bytes || file.size === 0) throw new Error('Boş dosya veya dosya 15 MB sınırını aşıyor.');
   if (!['application/pdf','image/png','image/jpeg','image/webp'].includes(file.type)) throw new Error('Yalnızca PDF, PNG, JPEG veya WebP seçin.');
 }
+// PDF.js 6 exposes destruction on the loading task, not PDFDocumentProxy.
+export async function disposePdfLoadingTask(loading) {
+  try { await loading?.destroy(); } catch { /* Cleanup must not replace extraction output. */ }
+}
 export async function readCargoDocument(file, { signal, onProgress = () => {}, forceOcr = false } = {}) {
   checkFile(file);
   let worker, pdf, loading, bitmap;
-  const abort = () => { worker?.terminate(); loading?.destroy(); };
+  const abort = () => { if (worker) Promise.resolve(worker.terminate()).catch(() => {}); void disposePdfLoadingTask(loading); };
   const check = () => { if (signal?.aborted) throw new DOMException('İptal edildi','AbortError'); };
   signal?.addEventListener('abort',abort,{once:true});
   async function ocr(input) {
@@ -64,7 +68,6 @@ export async function readCargoDocument(file, { signal, onProgress = () => {}, f
     signal?.removeEventListener('abort',abort);
     bitmap?.close();
     if (worker) await worker.terminate().catch(() => {});
-    if (pdf) await pdf.destroy().catch(() => {});
-    else if (loading) await loading.destroy().catch(() => {});
+    await disposePdfLoadingTask(loading);
   }
 }
