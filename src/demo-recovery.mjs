@@ -2,6 +2,12 @@ import {initialCargo,slots,place} from './engine.mjs';
 
 export const AIRCRAFT_STORE='cargo-demo-v1';
 export const RECOVERY_STORE='cargo-demo-recovery-v1';
+// All aircraft writes in the app share this cross-tab exclusive transaction.
+export function withAircraftWriteLock(operation){
+ const locks=(globalThis.window?.navigator||globalThis.navigator)?.locks;
+ if(!locks?.request)return Promise.reject(new Error('Güvenli kayıt kilidi bu tarayıcıda kullanılamıyor. Silme yapılmadı; güncel bir tarayıcıda yeniden deneyin.'));
+ return locks.request('cargo-demo-write-v1',{mode:'exclusive'},operation);
+}
 const copy=value=>JSON.parse(JSON.stringify(value));
 const snapshot=state=>({cargo:state.cargo,plan:state.plan,locked:state.locked||[]});
 const sameRecord=(a,b)=>!!a&&!!b&&Object.keys(a).length===Object.keys(b).length&&Object.keys(b).every(key=>Object.hasOwn(a,key)&&Object.is(a[key],b[key]));
@@ -93,6 +99,7 @@ export function undoDemoRemoval(storage,state){
  const history=readDemoRecovery(storage),index=history.findLastIndex(record=>!record.restored);
  if(index<0)throw new Error('Geri alınacak demo silme işlemi yok.');
  const restored=prepareDemoRestore(state,history[index]);
+ assertCurrent(storage,state);
  writeVerified(storage,AIRCRAFT_STORE,restored.next,'Geri alma kaydı doğrulanamadı. Kurtarma yedeği korunuyor; sayfayı yenileyip kontrol edin.');
  // Keep every backup, including restored entries. Undo never erases recovery data.
  const nextHistory=history.map((record,i)=>i===index?{...record,restored:restored.conflicts.length===0}:record);

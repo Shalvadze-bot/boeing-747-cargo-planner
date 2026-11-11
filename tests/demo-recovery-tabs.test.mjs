@@ -10,6 +10,8 @@ import {initialCargo} from '../src/engine.mjs';
 import {AIRCRAFT_STORE} from '../src/demo-recovery.mjs';
 const dom=new JSDOM('<!doctype html><div id="a"></div><div id="b"></div>',{url:'https://example.test/boeing-747-cargo-planner/'});
 for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,FormData:dom.window.FormData,IS_REACT_ACT_ENVIRONMENT:true}))globalThis[key]=value;
+let aircraftWriteQueue=Promise.resolve();
+Object.defineProperty(dom.window.navigator,'locks',{value:{request(name,options,operation){const next=aircraftWriteQueue.then(operation);aircraftWriteQueue=next.catch(()=>{});return next;}}});
 globalThis.Worker=class{postMessage(){}terminate(){}};
 const {createRoot}=await import('react-dom/client');
 const output=resolve(`node_modules/.cache/demo-tabs-${process.pid}.mjs`);

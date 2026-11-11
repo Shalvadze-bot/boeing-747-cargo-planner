@@ -10,6 +10,8 @@ import {initialCargo} from '../src/engine.mjs';
 import {AIRCRAFT_STORE,RECOVERY_STORE} from '../src/demo-recovery.mjs';
 const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'https://example.test/boeing-747-cargo-planner/'});
 for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true}))globalThis[key]=value;
+let aircraftWriteQueue=Promise.resolve();
+Object.defineProperty(dom.window.navigator,'locks',{value:{request(name,options,operation){const next=aircraftWriteQueue.then(operation);aircraftWriteQueue=next.catch(()=>{});return next;}}});
 globalThis.Worker=class{postMessage(){}terminate(){}};
 const {createRoot}=await import('react-dom/client');
 const output=resolve(`node_modules/.cache/demo-recovery-ui-${process.pid}.mjs`);
@@ -66,5 +68,12 @@ test('confirm/cancel, recoverable demo deletion, undo, reload and large inventor
   await remount();
   assert.equal(document.querySelectorAll('.cargo').length,36);
   assert.equal(saved().cargo.length,36);assert.match(document.querySelector('.summary').textContent,/36 palet/);
+  await click(button('Yerleşimi öner'));
+  const getItem=dom.window.Storage.prototype.getItem;
+  dom.window.Storage.prototype.getItem=function(key){if(key===AIRCRAFT_STORE)throw new Error('storage unavailable');return getItem.call(this,key);};
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,80));});
+  dom.window.Storage.prototype.getItem=getItem;
+  assert.equal(button('Yerleşimi öner').disabled,false);
+  assert.match(document.querySelector('.toast').textContent,/kaydı okunamadı/);
  }finally{await act(async()=>root.unmount());dom.window.close();await rm(output,{force:true});}
 });

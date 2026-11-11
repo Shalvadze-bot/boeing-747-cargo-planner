@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialCargo,initialPlan} from '../src/engine.mjs';
-import {AIRCRAFT_STORE,RECOVERY_STORE,isStarterDemo,starterDemos,readDemoRecovery,prepareDemoRemoval,removeDemosWithRecovery,undoDemoRemoval,saveAircraftState} from '../src/demo-recovery.mjs';
+import {AIRCRAFT_STORE,RECOVERY_STORE,isStarterDemo,starterDemos,readDemoRecovery,prepareDemoRemoval,removeDemosWithRecovery,undoDemoRemoval,saveAircraftState,withAircraftWriteLock} from '../src/demo-recovery.mjs';
 const custom={id:'PAL-09',name:'My PMC',weight:120000,l:317.5,w:243.84,h:140,priority:1,pmc:{items:[{id:'c1',l:100,w:80,h:140,x:8.5,y:8.5,z:0,color:'#123456'}]}};
 const base=()=>({cargo:structuredClone([...initialCargo,custom]),plan:{...initialPlan},locked:['M07','M03']});
 function memory(state){
@@ -105,4 +105,26 @@ test('a change during backup verification is checked again before deleting the s
  assert.throws(()=>removeDemosWithRecovery(storage,state),error=>error.code==='STALE');
  assert.deepEqual(JSON.parse(storage.getItem(AIRCRAFT_STORE)),later);
  assert.equal(readDemoRecovery(storage)[0].deletedCargo.length,8);
+});
+
+test('undo rechecks current data after reading recovery, before writing any restored plan',()=>{
+ const state=base(),storage=memory(state),removed=removeDemosWithRecovery(storage,state),get=storage.getItem.bind(storage);
+ const later={...removed.next,cargo:[...removed.next.cargo,{...custom,id:'PAL-10'}]};
+ let inject=true;
+ storage.getItem=key=>{const value=get(key);if(key===RECOVERY_STORE&&inject){inject=false;storage.map.set(AIRCRAFT_STORE,JSON.stringify(later));}return value;};
+ assert.throws(()=>undoDemoRemoval(storage,removed.next),error=>error.code==='STALE');
+ assert.deepEqual(JSON.parse(get(AIRCRAFT_STORE)),later);
+});
+test('aircraft write transactions use one exclusive cross-tab lock and fail closed without it',async()=>{
+ const old=globalThis.window;
+ const calls=[];let queue=Promise.resolve();
+ globalThis.window={navigator:{locks:{request(name,options,fn){calls.push([name,options]);const next=queue.then(fn);queue=next.catch(()=>{});return next;}}}};
+ try{
+  const order=[];
+  await Promise.all([withAircraftWriteLock(async()=>{order.push('a-start');await new Promise(resolve=>setTimeout(resolve,5));order.push('a-end');}),withAircraftWriteLock(()=>order.push('b'))]);
+  assert.deepEqual(order,['a-start','a-end','b']);
+  assert.ok(calls.every(([name,options])=>name==='cargo-demo-write-v1'&&options.mode==='exclusive'));
+  globalThis.window={navigator:{}};
+  await assert.rejects(withAircraftWriteLock(()=>assert.fail('must not run')),/kayıt kilidi/);
+ }finally{if(old===undefined)delete globalThis.window;else globalThis.window=old;}
 });
