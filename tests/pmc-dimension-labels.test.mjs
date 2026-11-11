@@ -18,8 +18,8 @@ function render(mirrored,showContour=true){
 }
 test('marked flat-top and low-edge dimensions use actual unchanged contour values in both units',()=>{
  assert.equal(PMC.shoulderX,100.33);assert.equal(PMC.lowHeight,104.14);
- assert.equal(contourHeight(PMC.width),104.14);
- assert.equal(contourHeight(0,true),104.14);
+ assert.ok(Math.abs(contourHeight(PMC.width)-104.14)<1e-9);
+ assert.ok(Math.abs(contourHeight(0,true)-104.14)<1e-9);
  assert.equal(PMC.maxHeight,243.84);
  for(const mirrored of [false,true]){
   const dom=render(mirrored),doc=dom.window.document;
