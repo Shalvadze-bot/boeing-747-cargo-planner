@@ -15,3 +15,12 @@
 /* Touch inventory gestures scroll natively; select and tap a bay to place. */
 .cargo-list{overscroll-behavior:contain;scrollbar-width:thin}.cargo{touch-action:pan-x pan-y;flex-shrink:0}
 @media(max-width:900px){.cargo-list{scroll-snap-type:x proximity}.cargo{scroll-snap-align:start}}
+
+/* Recoverable cleanup is separate from removing a pallet from a position. */
+.demo-cleanup{padding:12px 16px;display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--line)}
+.demo-cleanup button{justify-content:flex-start;text-align:left}
+.demo-cleanup small{font-size:11px;line-height:1.5}
+.demo-removal-list{padding-left:20px;font-size:13px;line-height:1.8}
+
+.dialog .cleanup-error{color:#ffe2a2;background:#382b13;border:1px solid #be8c1e;padding:12px;border-radius:6px}
+.storage-conflict{flex-wrap:wrap}

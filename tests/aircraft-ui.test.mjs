@@ -10,6 +10,8 @@ import React, { act } from 'react';
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://example.test/boeing-747-cargo-planner/' });
 for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) globalThis[key] = value;
 // This test exercises workspace navigation, not packing (covered independently).
+let aircraftWriteQueue=Promise.resolve();
+Object.defineProperty(dom.window.navigator,'locks',{value:{request(name,options,operation){const next=aircraftWriteQueue.then(operation);aircraftWriteQueue=next.catch(()=>{});return next;}}});
 globalThis.Worker = class { postMessage() {} terminate() {} };
 const { createRoot } = await import('react-dom/client');
 const output = resolve(`node_modules/.cache/aircraft-ui-${process.pid}.mjs`);

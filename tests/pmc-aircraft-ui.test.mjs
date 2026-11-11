@@ -10,6 +10,8 @@ import React, { act } from 'react';
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://example.test/boeing-747-cargo-planner/' });
 for (const [key,value] of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,FormData:dom.window.FormData,IS_REACT_ACT_ENVIRONMENT:true})) globalThis[key]=value;
+let aircraftWriteQueue=Promise.resolve();
+Object.defineProperty(dom.window.navigator,'locks',{value:{request(name,options,operation){const next=aircraftWriteQueue.then(operation);aircraftWriteQueue=next.catch(()=>{});return next;}}});
 const { createRoot } = await import('react-dom/client');
 let activeWorker;
 globalThis.self = { postMessage(data) { if (activeWorker && !activeWorker.terminated) activeWorker.onmessage?.({ data }); } };
