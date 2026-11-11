@@ -39,7 +39,7 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  assert.equal(diagram.querySelectorAll('path')[0].getAttribute('d'),'M45 170 V30 H132 L255 110 V170 Z');
  assert.equal(diagram.querySelectorAll('path')[1].getAttribute('d'),'M55 163 V45 H128 L245 117 V163 Z');
  const dims=[...document.querySelectorAll('.pmc-scene-dimension text')].map(n=>n.textContent);
- assert.deepEqual(dims,['96″ / 243,84 cm · X','125″ / 317,5 cm · Y','96″ / 243,84 cm · Z']);
+ assert.deepEqual(dims,['96″ / 243,84 cm · X','125″ / 317,5 cm · Y','96″ / 243,84 cm · Z','Düz üst39,5″ / 100,33 cm','Alçak kenar41″ / 104,14 cm']);
  assert.match(document.querySelector('.pmc-base-stat').textContent,/≈89,31 × 118,31/);
  assert.match(document.querySelector('.pmc-scene-legend').textContent,/8,5 cm \/ ≈3,35″/);
  assert.match(document.querySelector('.pmc-scene-legend').textContent,/226,84 × 300,5 cm \/ ≈89,31 × 118,31″/);

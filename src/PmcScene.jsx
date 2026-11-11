@@ -61,8 +61,11 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
   const select = item => { if (!moved.current) onSelectItem?.(item.id); };
   const reset = () => {setCamera(ISO);setZoom(1);};
   function line(a,b,props={}) { const p=project(a),q=project(b);return <line x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]} {...props}/>; }
-  function dimension(a,b,text,key) { const p=project(a),q=project(b), mid=[(p[0]+q[0])/2,(p[1]+q[1])/2];return <g key={key} className="pmc-scene-dimension">{line(a,b,{markerStart:`url(#${id}-arrow)`,markerEnd:`url(#${id}-arrow)`})}<text x={mid[0]} y={mid[1]-9} textAnchor="middle">{text}</text></g>; }
+  function dimension(a,b,text,key) { const p=project(a),q=project(b), mid=[(p[0]+q[0])/2,(p[1]+q[1])/2], lines=text.split("\n");return <g key={key} className="pmc-scene-dimension" data-dimension={key} aria-label={lines.join(" ")}>{line(a,b,{markerStart:`url(#${id}-arrow)`,markerEnd:`url(#${id}-arrow)`})}<text x={mid[0]} y={mid[1]-9-(lines.length-1)*13} textAnchor="middle">{lines.map((part,i)=><tspan key={i} x={mid[0]} dy={i?13:0}>{part}</tspan>)}</text></g>; }
   const first = indices[0];
+  // Labels follow the same mirrored physical contour, not the inset base.
+  const highX=mirrorContour?W:0, shoulderX=mirrorContour?W-100.33:100.33, lowX=mirrorContour?0:W;
+  const highDimX=highX+(mirrorContour?18:-18), lowDimX=lowX+(mirrorContour?-22:22);
   return <section className="pmc-scene" aria-label="Üç boyutlu PMC yük yerleşimi">
     <div className="pmc-scene-toolbar"><div className="pmc-scene-view-buttons" role="group" aria-label="Kamera görünümü">
       <button type="button" onClick={reset} title="İzometrik görünüm">İzometrik</button>
@@ -91,7 +94,11 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
         {visible.filter(p=>p.z<heightCut).map(item=>{const p=project(point(item.x+item.w/2,item.y+item.l/2,item.z+Math.min(item.h,heightCut-item.z)));return <g key={`select-${item.id}`} data-item-id={item.id} role="button" tabIndex={0} aria-label={`${item.name}, ${item.id}, ${fmt(item.w)} × ${fmt(item.l)} × ${fmt(item.h)} santimetre. Seç.`} aria-pressed={selectedItemId===item.id} className="pmc-scene-item-label" onClick={()=>select(item)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelectItem?.(item.id);}}} transform={`translate(${p[0]},${p[1]})`}><circle r="15" fill="transparent"/>{labels && <><rect x="-29" y="-12" width="58" height="22" rx="5" fill="#0a1427" fillOpacity=".84" stroke={selectedItemId===item.id?'#f5ca56':'#f8fafc'} strokeOpacity=".25"/><text textAnchor="middle" y="3">{String(item.id).length>9?String(item.id).slice(-9):item.id}</text></>}</g>;})}
         {dimension(point(0,first*L-24),point(W,first*L-24),'96″ / 243,84 cm · X','dim-x')}
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}
-        {camera.pitch<1.4 && dimension(point(-18,first*L,0),point(-18,first*L,H),'96″ / 243,84 cm · Z','dim-z')}
+        {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'96″ / 243,84 cm · Z','dim-z')}
+        {showContour && camera.pitch<1.4 && <>
+          {dimension(point(highX,first*L-24,H+14),point(shoulderX,first*L-24,H+14),'Düz üst\n39,5″ / 100,33 cm','dim-flat')}
+          {dimension(point(lowDimX,first*L-24,0),point(lowDimX,first*L-24,104.14),'Alçak kenar\n41″ / 104,14 cm','dim-low')}
+        </>}
         {!visible.length && <text x="450" y="474" textAnchor="middle" className="pmc-scene-empty">Yük ekleyin; yerleşimi burada üç boyutlu görün.</text>}
       </svg>
       <div className="pmc-scene-hint">↔ Sürükleyerek döndür · Yüke tıklayarak incele</div>
