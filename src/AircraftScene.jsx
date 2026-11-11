@@ -29,7 +29,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
   const visual = useRef(null); visual.current = {shell,separated,nose};
   useEffect(()=>{
     const change=()=>setFull(document.fullscreenElement===wrapper.current);
-    const escape=event=>{if(event.key==='Escape'&&document.fullscreenElement===wrapper.current){document.exitFullscreen().catch(()=>setFullscreenNotice('Tam ekrandan çıkılamadı. Tarayıcının tam ekran denetimini kullanın.'));}};
+    const escape=event=>{if(event.key==='Escape'&&document.fullscreenElement===wrapper.current){event.stopImmediatePropagation();document.exitFullscreen().catch(()=>setFullscreenNotice('Tam ekrandan çıkılamadı. Tarayıcının tam ekran denetimini kullanın.'));}};
     document.addEventListener('fullscreenchange',change);
     document.addEventListener('keydown',escape);
     return()=>{document.removeEventListener('fullscreenchange',change);document.removeEventListener('keydown',escape);};
