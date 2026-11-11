@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialCargo,initialPlan} from '../src/engine.mjs';
-import {AIRCRAFT_STORE,RECOVERY_STORE,isStarterDemo,starterDemos,readDemoRecovery,prepareDemoRemoval,removeDemosWithRecovery,undoDemoRemoval} from '../src/demo-recovery.mjs';
+import {AIRCRAFT_STORE,RECOVERY_STORE,isStarterDemo,starterDemos,readDemoRecovery,prepareDemoRemoval,removeDemosWithRecovery,undoDemoRemoval,saveAircraftState} from '../src/demo-recovery.mjs';
 const custom={id:'PAL-09',name:'My PMC',weight:120000,l:317.5,w:243.84,h:140,priority:1,pmc:{items:[{id:'c1',l:100,w:80,h:140,x:8.5,y:8.5,z:0,color:'#123456'}]}};
 const base=()=>({cargo:structuredClone([...initialCargo,custom]),plan:{...initialPlan},locked:['M07','M03']});
 function memory(state){
@@ -82,4 +82,27 @@ test('an all-demo inventory may become empty and is recoverable',()=>{
  const removed=removeDemosWithRecovery(storage,state);
  assert.deepEqual(removed.next,{cargo:[],plan:{},locked:[]});
  const restored=undoDemoRemoval(storage,removed.next);assert.deepEqual(restored.next.cargo,initialCargo);
+});
+
+test('colliding ids protect every record with that id, including an unchanged-looking demo',()=>{
+ const userCopy={...initialCargo[0],name:'My custom duplicate',weight:999};
+ const state={cargo:[...initialCargo,userCopy,custom],plan:{},locked:[]},storage=memory(state);
+ assert.equal(starterDemos(state.cargo).some(item=>item.id==='PAL-01'),false);
+ const removed=removeDemosWithRecovery(storage,state);
+ assert.deepEqual(removed.next.cargo,[initialCargo[0],userCopy,custom]);
+ assert.equal(removed.removed,7);
+});
+test('guarded ordinary autosave cannot overwrite newer data from another tab',()=>{
+ const state=base(),storage=memory(state),token=storage.getItem(AIRCRAFT_STORE);
+ const later={...state,cargo:[...state.cargo,{...custom,id:'PAL-10',name:'Tab B record'}]};
+ storage.setItem(AIRCRAFT_STORE,JSON.stringify(later));
+ assert.throws(()=>saveAircraftState(storage,{...state,locked:['M03']},token),error=>error.code==='STALE');
+ assert.deepEqual(JSON.parse(storage.getItem(AIRCRAFT_STORE)),later);
+});
+test('a change during backup verification is checked again before deleting the saved plan',()=>{
+ const state=base(),storage=memory(state),set=storage.setItem.bind(storage),later={...state,cargo:[...state.cargo,{...custom,id:'PAL-10'}]};
+ storage.setItem=(key,value)=>{set(key,value);if(key===RECOVERY_STORE)set(AIRCRAFT_STORE,JSON.stringify(later));};
+ assert.throws(()=>removeDemosWithRecovery(storage,state),error=>error.code==='STALE');
+ assert.deepEqual(JSON.parse(storage.getItem(AIRCRAFT_STORE)),later);
+ assert.equal(readDemoRecovery(storage)[0].deletedCargo.length,8);
 });

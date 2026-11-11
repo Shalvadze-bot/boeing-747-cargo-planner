@@ -11,7 +11,11 @@ export function isStarterDemo(item){
  const original=initialCargo.find(demo=>demo.id===item?.id);
  return sameRecord(item,original);
 }
-export function starterDemos(cargo){return cargo.filter(isStarterDemo);}
+export function starterDemos(cargo){
+ const counts=new Map();for(const item of cargo)counts.set(item.id,(counts.get(item.id)||0)+1);
+ return cargo.filter(item=>counts.get(item.id)===1&&isStarterDemo(item));
+}
+const stale=()=>Object.assign(new Error('Plan başka bir sekmede değişmiş. Verileri korumak için sayfayı yenileyin.'),{code:'STALE'});
 
 export function readDemoRecovery(storage){
  const raw=storage.getItem(RECOVERY_STORE);
@@ -33,13 +37,18 @@ function writeVerified(storage,key,value,message){
  try{storage.setItem(key,encoded);if(storage.getItem(key)!==encoded)throw new Error('Readback mismatch');}
  catch{throw new Error(message);}
 }
+export function saveAircraftState(storage,state,expectedRaw){
+ if(storage.getItem(AIRCRAFT_STORE)!==expectedRaw)throw stale();
+ writeVerified(storage,AIRCRAFT_STORE,snapshot(state),'Plan kaydı doğrulanamadı.');
+ return JSON.stringify(snapshot(state));
+}
 function assertCurrent(storage,state){
  const raw=storage.getItem(AIRCRAFT_STORE);
  if(raw===null)return;
  let current;
  try{current=JSON.parse(raw);}catch{throw new Error('Kaydedilmiş plan okunamıyor; işlem yapılmadı.');}
  if(JSON.stringify(snapshot(current))!==JSON.stringify(snapshot(state)))
-  throw new Error('Plan başka bir sekmede değişmiş. Verileri korumak için sayfayı yenileyin.');
+  throw stale();
 }
 export function prepareDemoRemoval(state){
  const deletedCargo=starterDemos(state.cargo).map(item=>({...item}));
@@ -57,6 +66,7 @@ export function removeDemosWithRecovery(storage,state){
  const nextHistory=[...history,recovery];
  // Backup must exist and match byte-for-byte before changing the saved plan.
  writeVerified(storage,RECOVERY_STORE,nextHistory,'Kurtarma yedeği kaydedilip doğrulanamadı. Demo paletler silinmedi.');
+ assertCurrent(storage,state);
  writeVerified(storage,AIRCRAFT_STORE,next,'Plan kaydı doğrulanamadı. Kurtarma yedeği korunuyor; sayfayı yenileyip kontrol edin.');
  return {next,history:nextHistory,removed:recovery.deletedCargo.length};
 }

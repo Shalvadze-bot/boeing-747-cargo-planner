@@ -34,7 +34,14 @@ test('confirm/cancel, recoverable demo deletion, undo, reload and large inventor
   await click(button('Vazgeç'));
   assert.equal(localStorage.getItem(AIRCRAFT_STORE),before);
   assert.equal(localStorage.getItem(RECOVERY_STORE),null);
-  await click(button('Demo paletlerini sil (8)'));await click(button('8 demo paletini sil'));
+  await click(button('Demo paletlerini sil (8)'));
+  const setItem=dom.window.Storage.prototype.setItem;
+  dom.window.Storage.prototype.setItem=function(key,value){if(key===RECOVERY_STORE)throw new Error('quota');return setItem.call(this,key,value);};
+  await click(button('8 demo paletini sil'));
+  assert.match(document.querySelector('.dialog [role="alert"]').textContent,/Demo paletler silinmedi/);
+  assert.equal(localStorage.getItem(AIRCRAFT_STORE),before);
+  dom.window.Storage.prototype.setItem=setItem;
+  await click(button('8 demo paletini sil'));
   assert.deepEqual(saved(),{cargo:[custom],plan:{},locked:[]});
   assert.equal(JSON.parse(localStorage.getItem(RECOVERY_STORE))[0].deletedCargo.length,8);
   assert.equal(document.querySelector('[data-visual-only="true"]').dataset.visibleCargo,'PAL-09');

@@ -21,3 +21,6 @@
 .demo-cleanup button{justify-content:flex-start;text-align:left}
 .demo-cleanup small{font-size:11px;line-height:1.5}
 .demo-removal-list{padding-left:20px;font-size:13px;line-height:1.8}
+
+.dialog .cleanup-error{color:#ffe2a2;background:#382b13;border:1px solid #be8c1e;padding:12px;border-radius:6px}
+.storage-conflict{flex-wrap:wrap}
