@@ -68,9 +68,9 @@ test('confirm/cancel, recoverable demo deletion, undo, reload and large inventor
   await remount();
   assert.equal(document.querySelectorAll('.cargo').length,36);
   assert.equal(saved().cargo.length,36);assert.match(document.querySelector('.summary').textContent,/36 palet/);
-  await click(button('Yerleşimi öner'));
   const getItem=dom.window.Storage.prototype.getItem;
   dom.window.Storage.prototype.getItem=function(key){if(key===AIRCRAFT_STORE)throw new Error('storage unavailable');return getItem.call(this,key);};
+  await click(button('Yerleşimi öner'));
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,80));});
   dom.window.Storage.prototype.getItem=getItem;
   assert.equal(button('Yerleşimi öner').disabled,false);
