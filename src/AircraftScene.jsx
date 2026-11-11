@@ -120,7 +120,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
       });
       listen(window,'pointercancel',e=>{pointers.delete(e.pointerId);gesture=null;});
       listen(canvas,'pointerleave',()=>setHover(''));
-      listen(canvas,'webglcontextlost',e=>{e.preventDefault();lost=true;if(frame!==undefined)cancelAnimationFrame(frame);setError('3D grafik bağlantısı kesildi. Yeniden deneyebilir veya üstten görünümü kullanabilirsiniz.');});
+      listen(canvas,'webglcontextlost',e=>{e.preventDefault();lost=true;if(frame!==undefined)cancelAnimationFrame(frame);setError(latest.current.readOnly?'3D grafik bağlantısı kesildi. Yeniden deneyin veya önizlemeyi kapatın; planınız korunuyor.':'3D grafik bağlantısı kesildi. Yeniden deneyebilir veya üstten görünümü kullanabilirsiniz.');});
       listen(canvas,'webglcontextrestored',()=>setRetry(n=>n+1));
       const resize=()=>{const w=Math.max(container.clientWidth,1),h=Math.max(container.clientHeight,1);camera.aspect=w/h;const nextScale=Math.max(1,1.45/camera.aspect);camera.position.sub(controls.target).multiplyScalar(nextScale/fitScale).add(controls.target);fitScale=nextScale;controls.maxDistance=220*fitScale;camera.updateProjectionMatrix();renderer.setSize(w,h);};
       if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(resize);observer.observe(container);}
@@ -142,7 +142,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
       };render();
     } catch (cause) {
       console.error('Aircraft 3D initialization failed:', cause);
-      setError('Bu tarayıcıda 3D görünüm açılamadı. Planınız korunuyor; üstten görünümü kullanabilirsiniz.');
+      setError(latest.current.readOnly?'Bu tarayıcıda 3D önizleme açılamadı. Yeniden deneyin veya önizlemeyi kapatın; planınız korunuyor.':'Bu tarayıcıda 3D görünüm açılamadı. Planınız korunuyor; üstten görünümü kullanabilirsiniz.');
     }
     return()=>{
       stopped=true;if(frame!==undefined)cancelAnimationFrame(frame);api.current=null;

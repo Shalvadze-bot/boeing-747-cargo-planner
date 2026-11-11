@@ -3,12 +3,12 @@
 /* The isolated preview owns no saved plan state. Keep its warning inside
    the scene wrapper so it remains visible in fullscreen as well. */
 .pmc-visual-preview-button{margin:0 16px 8px;white-space:normal;line-height:1.4}
-.preview-dialog{width:1280px;max-width:100%;padding:24px;max-height:94vh}
-.preview-dialog h2{padding-right:35px}
+.dialog.preview-dialog{width:1280px;max-width:100%;padding:24px;max-height:94vh}
+.dialog.preview-dialog h2{padding-right:35px}
 .preview-dialog .aircraft-3d-tools label{display:flex;align-items:center}
 .preview-dialog .aircraft-3d-tools select{display:inline-block;width:auto;margin:0;padding:8px}
 .preview-dialog .aircraft-3d-viewport{height:clamp(280px,48vh,600px)}
 .visual-preview-warning{border:2px solid #f59e0b;background:#3b270b;color:#ffedb5;font-size:13px;line-height:1.55;display:grid;gap:6px;padding:12px 14px}
 .visual-preview-warning strong{color:#fcd34d}
 .preview-return{margin-top:16px}
-@media(max-width:620px){.overlay:has(.preview-dialog){padding:8px}.preview-dialog{padding:20px 12px;max-height:96vh}.preview-dialog h2{font-size:18px}.visual-preview-warning{font-size:12px}}
+@media(max-width:620px){.overlay:has(.preview-dialog){padding:8px}.dialog.preview-dialog{padding:20px 12px;max-height:96vh}.dialog.preview-dialog h2{font-size:18px}.visual-preview-warning{font-size:12px}}

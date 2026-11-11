@@ -16,6 +16,7 @@ const output=resolve(`node_modules/.cache/pmc-visual-ui-${process.pid}.mjs`);
 await mkdir(resolve('node_modules/.cache'),{recursive:true});
 await build({entryPoints:['src/App.jsx'],outfile:output,bundle:true,packages:'external',format:'esm',platform:'node',jsx:'automatic',loader:{'.css':'empty'},define:{'import.meta.env.BASE_URL':'"/boeing-747-cargo-planner/"'}});
 const {App}=await import(pathToFileURL(output));
+Object.defineProperty(document,'fullscreenEnabled',{configurable:true,value:true});
 const root=createRoot(document.getElementById('root'));
 const button=(text,within=document)=>[...within.querySelectorAll('button')].find(n=>n.textContent.trim()===text);
 const click=async node=>act(async()=>{assert.ok(node);node.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));});
@@ -39,6 +40,15 @@ test('visual-only dialog preserves saved weight, cargo, plan and locks through r
    const scene=dialog.querySelector('.aircraft-3d');
    assert.equal(scene.dataset.visualOnly,'true');
    assert.equal(scene.dataset.visibleCargo,'PAL-09');
+   // Fullscreen retains the warning; first Escape leaves fullscreen only.
+   scene.requestFullscreen=async()=>{Object.defineProperty(document,'fullscreenElement',{configurable:true,value:scene});document.dispatchEvent(new dom.window.Event('fullscreenchange'));};
+   document.exitFullscreen=async()=>{Object.defineProperty(document,'fullscreenElement',{configurable:true,value:null});document.dispatchEvent(new dom.window.Event('fullscreenchange'));};
+   await click(button('Tam ekran',dialog));
+   assert.equal(document.fullscreenElement,scene);
+   assert.match(scene.querySelector('.visual-preview-warning').textContent,/AĞIRLIK DOĞRULANMADI/);
+   await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+   assert.equal(document.fullscreenElement,null);
+   assert.equal(document.querySelector('[role="dialog"]'),dialog);
    assert.equal(dialog.querySelector('.aircraft-3d-positions'),null);
    assert.equal(button('Üstten görünümü aç',dialog),undefined);
    await click(button('Güverteleri ayır',dialog));
