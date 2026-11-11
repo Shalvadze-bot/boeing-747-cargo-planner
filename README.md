@@ -121,3 +121,10 @@ Güncel PMC hesaplamasının altında **Uçak paletlerine ekle** düğmesini kul
 Hesaplanan kutu ölçüleri, konumları ve renkleri ULD listesine bir kopya olarak eklenir ve 3D uçakta gösterilir. Mevcut paletler, yerleşimler ve kilitler korunur. Yalnızca mevcut örnek ölçü/ağırlık kontrollerini geçen boş pozisyonlar kullanılır; yer bulunamayan paletler bekler. Aynı hesaplama ikinci kez eklenmez. Sonraki PMC düzenlemeleri aktarılmış kopyaları değiştirmez. Komşu palete üst taşma olan hesaplamalar, birbirinden bağımsız uçak pozisyonlarına taşınamaz; önce taşmayı kapatıp yeniden hesaplayın.
 
 Bu aktarım operasyon onayı değildir. Kutuların en-boy-yükseklik oranları korunur ancak uçak pozisyonlarının şematik ölçeğine küçültülür. Ağırlık merkezi, zemin, bağlama veya gerçek uçak konturu uygunluğu doğrulanmaz. Telefonlarda ULD listesini parmağınızla kaydırın; bir paleti seçip boş pozisyona dokunarak yerleştirin. Fareyle sürükleme korunur.
+
+
+### Yalnız seçili PMC için görsel önizleme
+
+Uçak yük listesinde bir PMC paletini seçip **Yalnız bu PMC’yi görsel önizle** düğmesine basın. Ayrı önizleme penceresi yalnızca seçili paletin kutularını 3D uçakta gösterir; diğer yükler silinmez. Mevcut ana güverte pozisyonu varsa görsel referans olarak kullanılır, yoksa M07 yalnızca şematik referanstır. Bu referans kaydedilmiş plana atanmaz.
+
+Önizleme ağırlık, ölçü, denge veya operasyonel uygunluk kontrolü yapmaz. Kayıtlı ağırlık açıkça gösterilir ama değiştirilmez ve doğru kabul edilmez. Önizleme sırasında pozisyon seçme/yerleştirme kapalıdır. Kargo listesi, yerleşimler, sabitlemeler, özet, indirme çıktısı ve her iki tarayıcı kaydı korunur. Pencereyi kapatınca normal kontroller aynen devam eder; örnek ağırlık limitini aşan palet hâlâ normal yerleşimde engellenir. Bu görünüm yükleme veya uçuş onayı değildir.
