@@ -1,0 +1,63 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdir,rm} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {build} from 'esbuild';
+import {JSDOM} from 'jsdom';
+import React,{act} from 'react';
+import {initialCargo} from '../src/engine.mjs';
+import {AIRCRAFT_STORE,RECOVERY_STORE} from '../src/demo-recovery.mjs';
+const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'https://example.test/boeing-747-cargo-planner/'});
+for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true}))globalThis[key]=value;
+globalThis.Worker=class{postMessage(){}terminate(){}};
+const {createRoot}=await import('react-dom/client');
+const output=resolve(`node_modules/.cache/demo-recovery-ui-${process.pid}.mjs`);
+await mkdir(resolve('node_modules/.cache'),{recursive:true});
+await build({entryPoints:['src/App.jsx'],outfile:output,bundle:true,packages:'external',format:'esm',platform:'node',jsx:'automatic',loader:{'.css':'empty'},define:{'import.meta.env.BASE_URL':'"/boeing-747-cargo-planner/"'}});
+const {App}=await import(pathToFileURL(output));
+let root=createRoot(document.getElementById('root'));
+const button=text=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===text);
+const click=async node=>act(async()=>{assert.ok(node);node.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));});
+const saved=()=>JSON.parse(localStorage.getItem(AIRCRAFT_STORE));
+const custom={id:'PAL-09',name:'User PMC',weight:120000,l:317.5,w:243.84,h:140,priority:1,pmc:{items:[{id:'custom-box',l:100,w:80,h:140,x:8.5,y:8.5,z:0,color:'#123456'}]}};
+async function remount(){await act(async()=>root.unmount());root=createRoot(document.getElementById('root'));await act(async()=>root.render(React.createElement(App)));}
+test('confirm/cancel, recoverable demo deletion, undo, reload and large inventories preserve custom cargo',async()=>{
+ try{
+  localStorage.setItem(AIRCRAFT_STORE,JSON.stringify({cargo:[...initialCargo,custom],plan:{},locked:[]}));
+  await act(async()=>root.render(React.createElement(App)));
+  const pmcSaved=localStorage.getItem('cargo-pmc-v1'),before=localStorage.getItem(AIRCRAFT_STORE);
+  await click([...document.querySelectorAll('.cargo')].find(node=>node.textContent.includes('PAL-09')));
+  await click(button('Demo paletlerini sil (8)'));
+  assert.equal(document.querySelectorAll('.demo-removal-list li').length,8);
+  assert.doesNotMatch(document.querySelector('.demo-removal-list').textContent,/PAL-09/);
+  await click(button('Vazgeç'));
+  assert.equal(localStorage.getItem(AIRCRAFT_STORE),before);
+  assert.equal(localStorage.getItem(RECOVERY_STORE),null);
+  await click(button('Demo paletlerini sil (8)'));await click(button('8 demo paletini sil'));
+  assert.deepEqual(saved(),{cargo:[custom],plan:{},locked:[]});
+  assert.equal(JSON.parse(localStorage.getItem(RECOVERY_STORE))[0].deletedCargo.length,8);
+  assert.equal(document.querySelector('[data-visual-only="true"]').dataset.visibleCargo,'PAL-09');
+  assert.match(document.querySelector('.visual-preview-warning').textContent,/120.000 kg/);
+  assert.equal(localStorage.getItem('cargo-pmc-v1'),pmcSaved);
+  await click(button('Önizlemeyi kapat · plana dön'));
+  await click(button('Demo silmeyi geri al'));
+  assert.equal(saved().cargo.length,9);assert.deepEqual(saved().cargo.find(item=>item.id==='PAL-09'),custom);
+  await click(button('Demo paletlerini sil (8)'));await click(button('8 demo paletini sil'));
+  await remount();
+  assert.equal(document.querySelectorAll('.cargo').length,1);
+  assert.equal(button('Demo paletlerini sil (0)').disabled,true);
+  assert.ok(button('Demo silmeyi geri al'));assert.deepEqual(saved().cargo,[custom]);
+  // Empty saved inventory must not silently repopulate with demos on reload.
+  localStorage.setItem(AIRCRAFT_STORE,JSON.stringify({cargo:[],plan:{},locked:[]}));
+  await remount();
+  assert.equal(document.querySelectorAll('.cargo').length,0);
+  assert.doesNotMatch(document.querySelector('.summary').textContent,/NaN/);
+  assert.deepEqual(saved().cargo,[]);
+  const many=Array.from({length:36},(_,i)=>({...custom,id:'PAL-'+(i+9)}));
+  localStorage.setItem(AIRCRAFT_STORE,JSON.stringify({cargo:many,plan:{},locked:[]}));
+  await remount();
+  assert.equal(document.querySelectorAll('.cargo').length,36);
+  assert.equal(saved().cargo.length,36);assert.match(document.querySelector('.summary').textContent,/36 palet/);
+ }finally{await act(async()=>root.unmount());dom.window.close();await rm(output,{force:true});}
+});
