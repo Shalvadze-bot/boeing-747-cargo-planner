@@ -33,6 +33,23 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  await act(async()=>{root.render(React.createElement(PmcPlanner));await pause();});
  await act(pause);
  assert.equal(document.querySelector('.pmc-errors'),null);
+ const diagram=document.querySelector('.pmc-profile-diagram');
+ for(const measure of ['96″ / 243,84 cm','39,5″','100,33 cm','56,5″','143,51 cm','41″','104,14 cm'])assert.ok(diagram.textContent.includes(measure),measure);
+ // Display-only labels preserve the physical contour; clearance is drawn only at the base.
+ assert.equal(diagram.querySelectorAll('path')[0].getAttribute('d'),'M45 170 V30 H132 L255 110 V170 Z');
+ assert.ok(diagram.querySelector('.pmc-base-clearance'));
+ assert.match(diagram.querySelector('.pmc-base-clearance').getAttribute('aria-label'),/yalnızca tabanda; yükseklikten çıkarılmaz/);
+ assert.equal(diagram.querySelector('.pmc-base-clearance path').getAttribute('d'),`M${45+210*8.5/243.84} 170 H${255-210*8.5/243.84}`);
+ assert.equal([...diagram.querySelectorAll('path')].some(p=>p.getAttribute('d')==='M55 163 V45 H128 L245 117 V163 Z'),false);
+ const dims=[...document.querySelectorAll('.pmc-scene-dimension text')].map(n=>n.textContent);
+ assert.deepEqual(dims,['96″ / 243,84 cm · X','125″ / 317,5 cm · Y','96″ / 243,84 cm · Z','Düz üst39,5″ / 100,33 cm','Alçak kenar41″ / 104,14 cm']);
+ assert.match(document.querySelector('.pmc-base-stat').textContent,/≈89,31 × 118,31/);
+ assert.match(document.querySelector('.pmc-scene-legend').textContent,/8,5 cm \/ ≈3,35″/);
+ assert.match(document.querySelector('.pmc-scene-legend').textContent,/226,84 × 300,5 cm \/ ≈89,31 × 118,31″/);
+ assert.equal(96*2.54,243.84);assert.equal(125*2.54,317.5);
+ assert.equal((8.5/2.54).toFixed(2),'3.35');
+ assert.equal((226.84/2.54).toFixed(2),'89.31');
+ assert.equal((300.5/2.54).toFixed(2),'118.31');
  assert.ok(document.querySelectorAll('.pmc-scene-box').length>0);
  assert.match(document.querySelector('.pmc-results-stats').textContent,/20/);
  const originalState=JSON.parse(localStorage.getItem('cargo-pmc-v1'));
