@@ -55,5 +55,18 @@ test('visual-only dialog preserves saved weight, cargo, plan and locks through r
   assert.equal(localStorage.getItem('cargo-demo-v1'),saved);
   assert.match(document.querySelector('.summary').textContent,/8.000/);
   assert.match(document.querySelector('.selected-cargo').textContent,/Bekliyor/);
+  // A pending optimizer result must never enter the isolated preview dialog.
+  await click(button('Yerleşimi öner'));
+  assert.equal(open().disabled,true);
+  await click(open());
+  assert.equal(document.querySelector('[aria-label="PMC görsel önizleme"]'),null);
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,100));});
+  assert.ok(document.querySelector('[aria-label="Yerleşim önerisi"]'));
+  await click(document.querySelector('[aria-label="Kapat"]'));
+  assert.equal(localStorage.getItem('cargo-demo-v1'),saved);
+  await click(open());
+  assert.equal(document.querySelector('.dialog .compare'),null);
+  assert.equal(button('Öneriyi uygula',document.querySelector('.dialog')),undefined);
+  await click(button('Önizlemeyi kapat · plana dön'));
  }finally{await act(async()=>root.unmount());dom.window.close();await rm(output,{force:true});}
 });
