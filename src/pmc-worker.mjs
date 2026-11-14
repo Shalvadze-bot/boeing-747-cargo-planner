@@ -1,3 +1,4 @@
+import {runLongCargo} from './pmc-long-cargo.mjs';
 import { runPacking } from './pmc-engine.mjs';
 
 self.onmessage = ({ data }) => {
@@ -10,7 +11,7 @@ self.onmessage = ({ data }) => {
       maxOverhangCm: data.config.allowOverhang && data.config.maxOverhangCm !== '' && data.config.maxOverhangCm != null ? Number(data.config.maxOverhangCm) : null,
       minOverhangHeightCm: data.config.allowOverhang && data.config.minOverhangHeightCm !== '' && data.config.minOverhangHeightCm != null ? Number(data.config.minOverhangHeightCm) : null,
     };
-    self.postMessage({ result: runPacking(rows, config) });
+    self.postMessage({ result: (config.longCargo ? runLongCargo : runPacking)(rows, config) });
   } catch {
     self.postMessage({ error: 'Hesaplama tamamlanamadı. Girdileri kontrol edip yeniden deneyin.' });
   }

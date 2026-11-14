@@ -2,6 +2,7 @@ import {PMC} from './pmc-engine.mjs';
 import {slots, place} from './engine.mjs';
 
 export function preparePmcTransfer(result) {
+  if (result?.config?.longCargo) throw new Error('Uzun yük test senaryosu gerçek uçak pozisyonlarına aktarılmaz; teknik eşleme ve doğrulama bekleniyor.');
   if (!result || result.errors?.length || !result.placements?.length) throw new Error('Önce geçerli bir PMC yerleşimi hesaplayın.');
   if (result.placements.some(p => p.overhangCm > 0 || p.touchedPallets?.length > 1)) throw new Error('Komşu palete taşan yükler bağımsız uçak pozisyonlarına aktarılamaz. Taşmayı kapatıp yeniden hesaplayın.');
   return result.pallets.filter(p => p.items.length).map(p => ({

@@ -128,3 +128,11 @@ Bu aktarım operasyon onayı değildir. Kutuların en-boy-yükseklik oranları k
 Uçak yük listesinde bir PMC paletini seçip **Yalnız bu PMC’yi görsel önizle** düğmesine basın. Ayrı önizleme penceresi yalnızca seçili paletin kutularını 3D uçakta gösterir; diğer yükler silinmez. Mevcut ana güverte pozisyonu varsa görsel referans olarak kullanılır, yoksa M07 yalnızca şematik referanstır. Bu referans kaydedilmiş plana atanmaz.
 
 Önizleme ağırlık, ölçü, denge veya operasyonel uygunluk kontrolü yapmaz. Kayıtlı ağırlık açıkça gösterilir ama değiştirilmez ve doğru kabul edilmez. Önizleme sırasında pozisyon seçme/yerleştirme kapalıdır. Kargo listesi, yerleşimler, sabitlemeler, özet, indirme çıktısı ve her iki tarayıcı kaydı korunur. Pencereyi kapatınca normal kontroller aynen devam eder; örnek ağırlık limitini aşan palet hâlâ normal yerleşimde engellenir. Bu görünüm yükleme veya uçuş onayı değildir.
+
+### Tek PMC üzerinde uzun yük — test önizlemesi
+
+Yeni açık seçim, bir parçayı bir fiziksel PMC üzerinde ortalı veya ön/arka/sol/sağ kenara hizalı gösterir. İzin verilen 90° dönüşler ayrıca karşılaştırılır. Fiziksel kenardan taşma cm ve inç olarak 3D üzerinde ölçülür; 8,5 cm taban boşluğu yükseklikten çıkarılmaz.
+
+Bu modda her parça bağımsız, istifsiz bir test senaryosudur. S(x,y) alanları eşit fiziksel PMC adımlı şematik hücrelerdir, gerçek uçak pozisyonları değildir. Taşmanın kapladığı komşu hücreler BOŞ BIRAK olarak işaretlenir; yeni plaka veya yinelenen ağırlık oluşturulmaz. Birden fazla parçanın pozisyon toplamı bağımsız senaryoların toplamıdır, ortak uçak yük planı değildir. Bu mod için uçak planına aktarım hem arayüzde hem aktarım fonksiyonunda kapalıdır.
+
+Seçim yalnızca şematik pozisyon sayısını azaltır, ağırlık merkezini optimize etmez. Kapı geçişi, manevra, gerçek konturlar, destek/sehim, CG, yük limitleri ve bağlama doğrulanana kadar sonuç teknik doğrulama bekliyor durumundadır. Bu güncelleme operasyon onayı değildir.

@@ -1,0 +1,16 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {longCargoCandidates,runLongCargo} from '../src/pmc-long-cargo.mjs';
+const row={id:'long',name:'400 cm parça',length:400,width:88,height:166,quantity:1,weight:120,allowRotation:false,color:'#fb923c'};
+test('one physical support, centered two edges, three schematic positions',()=>{const r=runLongCargo([row],{longCargoAlignment:'center'}),b=r.placements[0];assert.equal(r.summary.physicalPmcCount,1);assert.equal(b.positionCount,3);assert.equal(b.overhang.front,41.25);assert.equal(b.overhang.rear,41.25);assert.deepEqual(b.touchedPallets,[0]);assert.equal(r.pallets.length,1);assert.equal(b.flightApproved,false);});
+test('offset uses two positions, no phantom plate or weight duplication',()=>{const r=runLongCargo([row],{longCargoAlignment:'front'}),b=r.placements[0];assert.equal(b.positionCount,2);assert.equal(b.overhang.rear,82.5);assert.equal(b.overhang.front,0);assert.equal(r.summary.knownWeightKg,120);assert.equal(r.placements.length,1);assert.equal(b.blockedPositions.length,1);});
+test('auto compares candidates, rotation follows permission',()=>{const r=runLongCargo([row]);assert.equal(r.placements[0].positionCount,2);assert.equal(longCargoCandidates(row).length,5);assert.equal(longCargoCandidates({...row,allowRotation:true}).length,10);});
+test('very long cargo can block more than two positions',()=>{const b=runLongCargo([{...row,length:1100}],{longCargoAlignment:'front'}).placements[0];assert.equal(b.positionCount,4);assert.equal(b.blockedPositions.length,3);});
+test('unknown weights never become approved and each instance is counted once',()=>{const r=runLongCargo([{...row,weight:null,quantity:2}]);assert.equal(r.summary.physicalPmcCount,2);assert.equal(r.summary.unknownWeightCount,2);assert.equal(r.summary.knownWeightKg,0);assert.ok(r.placements.every(b=>!b.flightApproved));assert.equal(r.warnings.length,8);});
+test('physical edge clearance does not subtract height',()=>{const b=runLongCargo([row]).placements[0];assert.equal(b.h,166);assert.equal(b.overhang.rear,82.5);});
+test('invalid data and limits rejected',()=>{for(const bad of [0,-1,NaN,Infinity])assert.ok(runLongCargo([{...row,length:bad}]).errors.length);assert.ok(runLongCargo([row],{maxPallets:0}).errors.length);assert.ok(runLongCargo([row],{longCargoAlignment:'bad'}).errors.length);});
+test('physical PMC limit preserves unplaced accounting',()=>{const r=runLongCargo([{...row,quantity:3}],{maxPallets:1});assert.equal(r.summary.requestedCount,3);assert.equal(r.summary.placedCount,1);assert.equal(r.unplaced.length,2);});
+
+test('wide cargo uses one-sided transverse placement without rotating',()=>{const b=runLongCargo([{...row,length:88,width:400}]).placements[0];assert.equal(b.positionCount,2);assert.equal(b.rotated,false);assert.ok(Math.abs(b.overhang.right-156.16)<1e-6);});
+
+import {preparePmcTransfer} from '../src/pmc-aircraft.mjs';
+test('test mode cannot bypass transfer protection even without overhang',()=>{assert.throws(()=>preparePmcTransfer(runLongCargo([{...row,length:100}])),/test senaryosu/);});
