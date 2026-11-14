@@ -1,6 +1,20 @@
 import {PMC} from './pmc-engine.mjs';
 const EPS=1e-6;
 export const TECHNICAL_CHECKS = ['Kapı açıklığı ve kapıdan geçiş','Uçak içinde dönüş ve yerleştirme yolu','Gerçek pozisyon aralıkları ve konturları','Yükün desteği ve sehim/dayanım','Ağırlık merkezi ve devrilme','PMC, pozisyon ve zemin yük limitleri','Bağlama ve operatör onayı'];
+/** Allowed transverse origin for a rectangular box under the UNVERIFIED schematic profile.
+ * z+h is used, never a height-cut display setting. No aircraft/structural approval. */
+export function lateralBounds(box,mirrored=false) {
+  const {w,h,z=0}=box??{};
+  const bad=reason=>({valid:false,min:null,max:null,reason});
+  if(![w,h,z].every(Number.isFinite)||w<=0||h<=0||z<0)return bad('Geçerli genişlik, yükseklik ve taban yüksekliği gerekli.');
+  const top=z+h;
+  if(top>PMC.maxHeight+EPS)return bad('Yükün üstü şematik kontur yüksekliğini aşıyor.');
+  const limit=top<=PMC.lowHeight?PMC.width:PMC.shoulderX+(PMC.maxHeight-top)*(PMC.width-PMC.shoulderX)/(PMC.maxHeight-PMC.lowHeight);
+  const min=Math.max(PMC.margin,mirrored?PMC.width-limit:0);
+  const max=Math.min(PMC.width-PMC.margin-w,mirrored?PMC.width-w:limit-w);
+  if(max<min-EPS)return bad('8,5 cm taban payı ve yük yüksekliğinde kontur içinde yan hareket alanı yok.');
+  return {valid:true,min,max:Math.max(min,max),reason:null};
+}
 /** Schematic equal-pitch positions only, NOT aircraft loading approval. */
 export function longCargoCandidates(row) {
   const variants=row.allowRotation?[[row.width,row.length,false],[row.length,row.width,true]]:[[row.width,row.length,false]];
@@ -40,8 +54,18 @@ export function runLongCargo(rows,config={}) {
     if(anchor && Number.isFinite(anchor.y) && Math.abs(anchor.y)<=10000 && anchor.y<PMC.length && anchor.y+anchor.l>0 && anchor.h===r.height && candidates.some(v=>v.w===anchor.w && v.l===anchor.l && v.rotated===anchor.rotated)){
       c=placementGeometry(config.mirrored?PMC.width-PMC.margin-anchor.w:PMC.margin,anchor.y,anchor.w,anchor.l,r.height,anchor.rotated,'high');
     } else if(anchor) result.warnings.push(id+': ölçüler/yön değişti; yüksek kenar hizalaması yeniden uygulanmalı.');
+    const manual=config.manualXAnchors?.[id];
+    if(manual) {
+      const snapshotValid=Number.isFinite(manual.x)&&Number.isFinite(manual.y)&&Math.abs(manual.y)<=10000&&manual.y<PMC.length&&manual.y+manual.l>0&&manual.h===r.height&&candidates.some(v=>v.w===manual.w&&v.l===manual.l&&v.rotated===manual.rotated);
+      const bounds=snapshotValid?lateralBounds(manual,!!config.mirrored):null;
+      if(bounds?.valid) {
+        const x=Math.max(bounds.min,Math.min(bounds.max,manual.x));
+        c=placementGeometry(x,manual.y,manual.w,manual.l,r.height,manual.rotated,'manual');
+        if(Math.abs(x-manual.x)>EPS)result.warnings.push(id+': yan konum şematik kontur ve 8,5 cm taban sınırına kısıtlandı.');
+      } else result.warnings.push(id+': elle yan konum uygulanmadı; '+(bounds?.reason||'ölçüler/yön değişti veya konum geçersiz; yeniden yerleştirin.'));
+    }
     const p=result.placements.length;
-    const box={...c,id,rowId:r.id,name:r.name,color:r.color,weight:r.weight??null,stackable:false,palletIndex:p,touchedPallets:[p],localY:c.y,y:c.y+p*PMC.length,overhangCm:Math.max(...Object.values(c.overhang)),reviewRequired:true,supportId:null,supportIds:[],candidates,rationale:`${c.positionCount} şematik pozisyon; ${c.alignment==='high'?'yüksek kontur kenarına hizalı; mevcut boyuna konum ve dönüş korundu':alignment==='auto'?'izin verilen dönüşlerde en az pozisyon, eşitlikte döndürmeden ve ortalı yerleşim':'kullanıcının seçtiği yerleşim'}. Ağırlık merkezi optimizasyonu yapılmadı.`};
+    const box={...c,id,rowId:r.id,name:r.name,color:r.color,weight:r.weight??null,stackable:false,palletIndex:p,touchedPallets:[p],localY:c.y,y:c.y+p*PMC.length,overhangCm:Math.max(...Object.values(c.overhang)),reviewRequired:true,supportId:null,supportIds:[],candidates,rationale:`${c.positionCount} şematik pozisyon; ${c.alignment==='manual'?'elle yan konum; boyuna konum ve dönüş korundu, yalnızca şematik kontur kontrolü':c.alignment==='high'?'yüksek kontur kenarına hizalı; mevcut boyuna konum ve dönüş korundu':alignment==='auto'?'izin verilen dönüşlerde en az pozisyon, eşitlikte döndürmeden ve ortalı yerleşim':'kullanıcının seçtiği yerleşim'}. Ağırlık merkezi optimizasyonu yapılmadı.`};
     result.placements.push(box);result.pallets.push({index:p,items:[box]});
     result.summary.positionCount+=c.positionCount;result.summary.knownWeightKg+=r.weight??0;result.summary.unknownWeightCount+=r.weight==null?1:0;
   }

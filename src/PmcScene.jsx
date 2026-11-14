@@ -1,5 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import './pmc-scene.css';
+import {lateralBounds} from './pmc-long-cargo.mjs';
+import {contourHeight} from './pmc-engine.mjs';
 
 const W = 243.84, L = 317.5, H = 243.84, M = 8.5;
 const ISO = { yaw: -0.66, pitch: 0.48 };
@@ -21,7 +23,9 @@ function cuboid(x, y, z, w, l, h) {
   ];
 }
 
-export default function PmcScene({ placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
+export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
+  const [moveMode,setMoveMode]=useState(false);
+  const moveOrigins=useRef({});
   const id = useId().replace(/:/g, '');
   const [camera, setCamera] = useState(ISO);
   const [zoom, setZoom] = useState(1);
@@ -32,6 +36,10 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
   const indices = selectedPallet == null ? Array.from({length: count}, (_, i) => i) : [selectedPallet];
   const visible = placements.filter(p => selectedPallet == null || p.palletIndex === selectedPallet || p.touchedPallets?.includes(selectedPallet) || (!p.overhang && p.y < (selectedPallet + 1) * L && p.y + p.l > selectedPallet * L));
   const selected = placements.find(p => p.id === selectedItemId);
+  const limits=selected?lateralBounds(selected,mirrorContour):null;
+  const validPosition=limits?.valid && selected.x>=limits.min-1e-6 && selected.x<=limits.max+1e-6;
+  const units=n=>`${fmt(n)} cm / ${fmt(n/2.54)} in`;
+  function moveTo(x){if(!selected || !limits?.valid || !Number.isFinite(x))return;if(moveOrigins.current[selected.id]==null)moveOrigins.current[selected.id]=selected.x;onMoveCargo?.(selected,Math.max(limits.min,Math.min(limits.max,x)));}
   const { project, depth, view } = useMemo(() => {
     const { yaw, pitch } = camera;
     const c = Math.cos(yaw), s = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -74,12 +82,36 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
     </div><div className="pmc-scene-zoom" role="group" aria-label="Yakınlaştırma">
       <button type="button" aria-label="Uzaklaştır" onClick={()=>setZoom(z=>Math.max(.55,z-.15))}>−</button><span>{Math.round(zoom*100)}%</span><button type="button" aria-label="Yakınlaştır" onClick={()=>setZoom(z=>Math.min(2.5,z+.15))}>+</button><button type="button" aria-label="Kamerayı sıfırla" title="Kamerayı sıfırla" onClick={reset}>↺</button>
     </div></div>
+    {onMoveCargo && <div className="pmc-move-controls">
+      <label><input type="checkbox" checked={moveMode} onChange={e=>{setMoveMode(e.target.checked);moveOrigins.current={};}}/> Yükü taşı · kamera sabit</label>
+      {moveMode && (!selected?<p>Taşımak için yükü seçin. Yalnızca yüksek/alçak kenar yönünde hareket eder.</p>:<>
+        <p>{selected.name} · Boyuna konum, taşma ve dönüş korunur.</p>
+        {!limits?.valid?<p role="alert">Bu yük için kontur ve 8,5 cm taban sınırları içinde yatay yerleşim yok. {limits?.reason}</p>:<>
+          {!validPosition && <p role="alert">Mevcut konum şematik kontur/taban sınırı dışında. Kontrolü kullanarak geçerli aralığa taşıyın.</p>}
+          <label>Yatay X (cm)<input aria-label="Yatay X (cm)" type="number" step="0.1" min={limits.min} max={limits.max} value={Number(selected.x.toFixed(2))} onChange={e=>{if(e.target.value!=='')moveTo(Number(e.target.value));}}/></label>
+          <input aria-label="Yükü yatay taşı" type="range" step="0.01" min={limits.min} max={limits.max} value={Math.max(limits.min,Math.min(limits.max,selected.x))} onChange={e=>moveTo(Number(e.target.value))}/>
+          <p>Hareket: {units(selected.x-(moveOrigins.current[selected.id]??selected.x))} · Pozitif X fiziksel sağa</p>
+          <p>Yüksek kenara kalan hareket: {validPosition?units(mirrorContour?limits.max-selected.x:selected.x-limits.min):'geçersiz konum'} · Alçak kenara kalan hareket: {validPosition?units(mirrorContour?selected.x-limits.min:limits.max-selected.x):'geçersiz konum'}</p>
+          <p>Tabanda X=0 boşluğu: {units(selected.x)} · X=243,84 boşluğu: {units(W-selected.x-selected.w)}</p>
+          <p>Üstte en az dikey kontur boşluğu: {units(Math.min(contourHeight(selected.x,mirrorContour),contourHeight(selected.x+selected.w,mirrorContour))-selected.z-selected.h)}</p>
+        </>}
+        <p>Yalnızca doğrulanmamış ZX-11 kesit geometrisi. Boyuna taşan kısımların komşu uçak konturları, destek, CG, kapı, limit ve bağlama doğrulanmadı. Uçuş/yükleme onayı değildir.</p>
+      </>)}
+    </div>}
     <div className="pmc-scene-canvas-wrap">
       <div className="pmc-scene-badge"><span/> {selectedPallet == null ? `${count} PMC · TÜM PALETLER` : `PMC ${selectedPallet+1} · YERLEŞİM`}</div>
       <svg className={dragging?'pmc-scene-canvas dragging':'pmc-scene-canvas'} viewBox="0 0 900 510" role="group" aria-labelledby={`${id}-title ${id}-desc`}
-        onPointerDown={e=>{if(e.button!==0)return; moved.current=false;drag.current={x:e.clientX,y:e.clientY,camera,itemId:e.target.closest?.("[data-item-id]")?.getAttribute("data-item-id")};setDragging(true);e.currentTarget.setPointerCapture(e.pointerId);}}
-        onPointerMove={e=>{if(!drag.current)return;const dx=e.clientX-drag.current.x,dy=e.clientY-drag.current.y;if(Math.abs(dx)+Math.abs(dy)>5)moved.current=true;setCamera({yaw:drag.current.camera.yaw+dx*.008,pitch:Math.max(.04,Math.min(1.54,drag.current.camera.pitch+dy*.006))});}}
-        onPointerUp={e=>{if(!moved.current && drag.current?.itemId){const item=visible.find(p=>String(p.id)===drag.current.itemId);if(item)onSelectItem?.(item.id);}drag.current=null;setDragging(false);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
+        onPointerDown={e=>{if(e.button!==0)return;moved.current=false;
+          const itemId=e.target.closest?.('[data-item-id]')?.getAttribute('data-item-id');
+          if(moveMode && onMoveCargo){const item=placements.find(p=>p.id===itemId);if(!item)return;onSelectItem?.(item.id);const bounds=lateralBounds(item,mirrorContour);if(!bounds.valid)return;
+            const a=project([0,0,0]),b=project([1,0,0]);const rect=e.currentTarget.getBoundingClientRect();const scale=Math.min(rect.width/900,rect.height/510);const vx=(b[0]-a[0])*scale,vy=(b[1]-a[1])*scale;if(vx*vx+vy*vy<.01)return;
+            moveOrigins.current[item.id]=item.x;drag.current={x:e.clientX,y:e.clientY,item,bounds,vx,vy};
+          }else drag.current={x:e.clientX,y:e.clientY,camera,itemId};
+          setDragging(true);e.currentTarget.setPointerCapture(e.pointerId);}}
+        onPointerMove={e=>{if(!drag.current)return;const d=drag.current,dx=e.clientX-d.x,dy=e.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>5)moved.current=true;
+          if(d.item){const x=d.item.x+(dx*d.vx+dy*d.vy)/(d.vx*d.vx+d.vy*d.vy);onMoveCargo?.(d.item,Math.max(d.bounds.min,Math.min(d.bounds.max,x)));}
+          else setCamera({yaw:d.camera.yaw+dx*.008,pitch:Math.max(.04,Math.min(1.54,d.camera.pitch+dy*.006))});}}
+        onPointerUp={e=>{if(!moved.current && drag.current?.itemId)onSelectItem?.(drag.current.itemId);drag.current=null;setDragging(false);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
         onPointerCancel={()=>{drag.current=null;setDragging(false);}}>
         <title id={`${id}-title`}>PMC paleti: 96 × 125 inç / 243,84 × 317,5 cm, ZX-11 konturu</title>
         <desc id={`${id}-desc`}>Döndürmek için sürükleyin. Bir yükü seçmek için tıklayın veya Tab ve Enter kullanın. Sarı şeritler dört yandaki 8,5 cm / yaklaşık 3,35 inç boşluğu gösterir. Planlama simülasyonudur.</desc>
@@ -107,7 +139,7 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
         </>}
         {!visible.length && <text x="450" y="474" textAnchor="middle" className="pmc-scene-empty">Yük ekleyin; yerleşimi burada üç boyutlu görün.</text>}
       </svg>
-      <div className="pmc-scene-hint">↔ Sürükleyerek döndür · Yüke tıklayarak incele</div>
+      <div className="pmc-scene-hint">{moveMode && onMoveCargo?'↔ Yükü sürükleyerek yatay taşı · Kamera sabit':'↔ Sürükleyerek döndür · Yüke tıklayarak incele'}</div>
     </div>
     <div className="pmc-scene-legend"><span><i style={{background:'#e5ad36'}}/> 8,5 cm / ≈3,35″ kenar boşluğu</span><span><i className="wire"/> ZX-11 konturu</span><span>Kullanılabilir taban: 226,84 × 300,5 cm / ≈89,31 × 118,31″</span><span>1 inç = 2,54 cm · ≈ yuvarlanmış dönüşüm</span></div>
     {selected && <div className="pmc-scene-selection" aria-live="polite"><div><i style={{background:selected.color}}/><strong>{selected.name}</strong><span>{selected.id}</span></div><div><b>{fmt(selected.w)} × {fmt(selected.l)} × {fmt(selected.h)} cm</b><span>X {fmt(selected.x)} · Y {fmt(selected.y)} · Z {fmt(selected.z)} cm</span></div><div><span>{(selected.touchedPallets?.length?selected.touchedPallets:[selected.palletIndex]).map(i=>`PMC ${i+1}`).join(' + ')}</span>{selected.overhangCm>0 && <b className="pmc-scene-overhang">{fmt(selected.overhangCm)} cm taşma</b>}</div></div>}

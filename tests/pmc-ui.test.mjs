@@ -129,6 +129,30 @@ test('high edge dropdown preserves longitudinal placement and clears on alternat
  await change(select,'center');assert.equal(select.value,'center');assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.highEdgeAnchors,null);
 });
 
+test('manual X controls and mouse/touch drag preserve Y and camera while clamping contour',async()=>{
+ localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows:[{id:'long',name:'Long',length:400,width:88,height:166,quantity:1,weight:25,allowRotation:false,stackable:false}],config:{maxPallets:6,longCargo:true,longCargoAlignment:'right',mirrored:true}}));
+ await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'manual-move'}));await pause();});await act(pause);
+ await click(document.querySelector('.pmc-move-controls input[type=checkbox]'));
+ await act(async()=>document.querySelector('.pmc-scene-item-label').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
+ await change(field('Yatay X (cm)'),'100');
+ let saved=JSON.parse(localStorage.getItem('cargo-pmc-v1'));assert.equal(saved.config.manualXAnchors['long:1'].x,100);assert.equal(saved.config.manualXAnchors['long:1'].y,-91);
+ await change(field('Yükü yatay taşı'),'120');
+ assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.manualXAnchors['long:1'].x,120);
+ const svg=document.querySelector('.pmc-scene-canvas');svg.getBoundingClientRect=()=>({width:900,height:510});svg.setPointerCapture=()=>{};svg.hasPointerCapture=()=>false;
+ const contourBefore=document.querySelector('.pmc-scene-contour').innerHTML;
+ for(const pointerType of ['mouse','touch']){
+  const face=document.querySelector('.pmc-scene-box');
+  const fire=async(node,type,x,y)=>act(async()=>{const event=new dom.window.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});Object.defineProperties(event,{pointerType:{value:pointerType},pointerId:{value:1}});node.dispatchEvent(event);await pause();});
+  await fire(face,'pointerdown',100,100);await fire(svg,'pointermove',10000,100);await fire(svg,'pointerup',10000,100);
+  saved=JSON.parse(localStorage.getItem('cargo-pmc-v1'));assert.equal(saved.config.manualXAnchors['long:1'].x,147.34);assert.equal(saved.config.manualXAnchors['long:1'].y,-91);
+  assert.equal(document.querySelector('.pmc-scene-contour').innerHTML,contourBefore);
+  await change(field('Yatay X (cm)'),'100');
+ }
+ assert.match(document.querySelector('.pmc-move-controls').textContent,/Yüksek kenara kalan hareket/);
+ assert.match(document.querySelector('.pmc-long-details').textContent,/sol kısa kenar 91 cm/);
+ await change(field('Yerleşim seçimi'),'center');assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.manualXAnchors,null);
+});
+
 test('worker normalizes edited numeric strings and rejects invalid inputs',()=>{
  let response;activeWorker={onmessage:({data})=>response=data};
  self.onmessage({data:{rows:[{id:'test',name:'Test',length:'100',width:'80',height:'50',quantity:'2',weight:'',stackable:false,allowRotation:false}],config:{maxPallets:'2',mirrored:false,allowOverhang:false,maxOverhangCm:'',minOverhangHeightCm:''}}});
