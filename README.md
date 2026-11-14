@@ -136,3 +136,5 @@ Yeni açık seçim, bir parçayı bir fiziksel PMC üzerinde ortalı veya ön/ar
 Bu modda her parça bağımsız, istifsiz bir test senaryosudur. S(x,y) alanları eşit fiziksel PMC adımlı şematik hücrelerdir, gerçek uçak pozisyonları değildir. Taşmanın kapladığı komşu hücreler BOŞ BIRAK olarak işaretlenir; yeni plaka veya yinelenen ağırlık oluşturulmaz. Birden fazla parçanın pozisyon toplamı bağımsız senaryoların toplamıdır, ortak uçak yük planı değildir. Bu mod için uçak planına aktarım hem arayüzde hem aktarım fonksiyonunda kapalıdır.
 
 Seçim yalnızca şematik pozisyon sayısını azaltır, ağırlık merkezini optimize etmez. Kapı geçişi, manevra, gerçek konturlar, destek/sehim, CG, yük limitleri ve bağlama doğrulanana kadar sonuç teknik doğrulama bekliyor durumundadır. Bu güncelleme operasyon onayı değildir.
+
+Ön/arka seçimleri, 317,5 cm uzun kenarları ifade eder: ön X=0, arka X=243,84 cm. Sol/sağ seçimleri Y=0 / Y=317,5 cm kısa kenarlarıdır. Seçim değiştiğinde aynı 3D görünüm otomatik yeniden hesaplanır. Örneğin döndürülmeyen 400 × 88 × 166 cm parçada ön hizalama X=8,5 cm, arka hizalama X=147,34 cm olur; her iki seçenekte hizalanan kenarın 8,5 cm boşluğu korunur.

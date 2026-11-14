@@ -5,8 +5,8 @@ export const TECHNICAL_CHECKS = ['Kapı açıklığı ve kapıdan geçiş','Uça
 export function longCargoCandidates(row) {
   const variants=row.allowRotation?[[row.width,row.length,false],[row.length,row.width,true]]:[[row.width,row.length,false]];
   return variants.flatMap(([w,l,rotated])=>['center','front','rear','left','right'].map(alignment=>{
-    const x=alignment==='left'?PMC.margin:alignment==='right'?PMC.width-PMC.margin-w:(PMC.width-w)/2;
-    const y=alignment==='front'?PMC.margin:alignment==='rear'?PMC.length-PMC.margin-l:(PMC.length-l)/2;
+    const x=alignment==='front'?PMC.margin:alignment==='rear'?PMC.width-PMC.margin-w:(PMC.width-w)/2;
+    const y=alignment==='left'?PMC.margin:alignment==='right'?PMC.length-PMC.margin-l:(PMC.length-l)/2;
     const x0=Math.floor((x+EPS)/PMC.width),x1=Math.ceil((x+w-EPS)/PMC.width)-1;
     const y0=Math.floor((y+EPS)/PMC.length),y1=Math.ceil((y+l-EPS)/PMC.length)-1;
     const positions=[];
