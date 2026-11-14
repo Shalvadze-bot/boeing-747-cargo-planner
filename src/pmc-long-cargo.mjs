@@ -7,14 +7,17 @@ export function longCargoCandidates(row) {
   return variants.flatMap(([w,l,rotated])=>['center','front','rear','left','right'].map(alignment=>{
     const x=alignment==='front'?PMC.margin:alignment==='rear'?PMC.width-PMC.margin-w:(PMC.width-w)/2;
     const y=alignment==='left'?PMC.margin:alignment==='right'?PMC.length-PMC.margin-l:(PMC.length-l)/2;
+    return placementGeometry(x,y,w,l,row.height,rotated,alignment);
+  }));
+}
+function placementGeometry(x,y,w,l,h,rotated,alignment) {
     const x0=Math.floor((x+EPS)/PMC.width),x1=Math.ceil((x+w-EPS)/PMC.width)-1;
     const y0=Math.floor((y+EPS)/PMC.length),y1=Math.ceil((y+l-EPS)/PMC.length)-1;
     const positions=[];
     for(let iy=y0;iy<=y1;iy++)for(let ix=x0;ix<=x1;ix++)positions.push({x:ix,y:iy,id:`S(${ix},${iy})`,support:ix===0&&iy===0});
     const overhang={left:Math.max(0,-x),right:Math.max(0,x+w-PMC.width),front:Math.max(0,-y),rear:Math.max(0,y+l-PMC.length)};
     const usableBoundaryExcess={left:Math.max(0,PMC.margin-x),right:Math.max(0,x+w-(PMC.width-PMC.margin)),front:Math.max(0,PMC.margin-y),rear:Math.max(0,y+l-(PMC.length-PMC.margin))};
-    return {usableBoundaryExcess,x,y,w,l,h:row.height,z:0,rotated,alignment,positions,overhang,physicalPmcCount:1,positionCount:positions.length,blockedPositions:positions.filter(p=>!p.support),status:'TECHNICAL_VALIDATION_PENDING',flightApproved:false};
-  }));
+    return {usableBoundaryExcess,x,y,w,l,h,z:0,rotated,alignment,positions,overhang,physicalPmcCount:1,positionCount:positions.length,blockedPositions:positions.filter(p=>!p.support),status:'TECHNICAL_VALIDATION_PENDING',flightApproved:false};
 }
 export function runLongCargo(rows,config={}) {
   const result={config:{...config,longCargo:true},positionModel:'INDEPENDENT_SCENARIOS_EQUAL_PITCH_NOT_AIRCRAFT_ALLOCATION',errors:[],warnings:['YALNIZCA TEST / GEOMETRİK ÖNİZLEME — uçuş veya yükleme onayı değildir.',...TECHNICAL_CHECKS.map(s=>s+': teknik bilgi / doğrulama bekliyor.')],placements:[],pallets:[],unplaced:[],summary:{requestedCount:0,placedCount:0,palletCount:0,physicalPmcCount:0,positionCount:0,knownWeightKg:0,unknownWeightCount:0}};
@@ -32,8 +35,13 @@ export function runLongCargo(rows,config={}) {
     const candidates=longCargoCandidates(r);
     const pool=candidates.filter(c=>alignment==='auto'||c.alignment===alignment);
     pool.sort((a,b)=>a.positionCount-b.positionCount||Number(a.rotated)-Number(b.rotated)||(['center','front','rear','left','right'].indexOf(a.alignment)-['center','front','rear','left','right'].indexOf(b.alignment)));
-    const c=pool[0],p=result.placements.length;
-    const box={...c,id,rowId:r.id,name:r.name,color:r.color,weight:r.weight??null,stackable:false,palletIndex:p,touchedPallets:[p],localY:c.y,y:c.y+p*PMC.length,overhangCm:Math.max(...Object.values(c.overhang)),reviewRequired:true,supportId:null,supportIds:[],candidates,rationale:`${c.positionCount} şematik pozisyon; ${alignment==='auto'?'izin verilen dönüşlerde en az pozisyon, eşitlikte döndürmeden ve ortalı yerleşim':'kullanıcının seçtiği yerleşim'}. Ağırlık merkezi optimizasyonu yapılmadı.`};
+    let c=pool[0];
+    const anchor=config.highEdgeAnchors?.[id];
+    if(anchor && Number.isFinite(anchor.y) && Math.abs(anchor.y)<=10000 && anchor.y<PMC.length && anchor.y+anchor.l>0 && anchor.h===r.height && candidates.some(v=>v.w===anchor.w && v.l===anchor.l && v.rotated===anchor.rotated)){
+      c=placementGeometry(config.mirrored?PMC.width-PMC.margin-anchor.w:PMC.margin,anchor.y,anchor.w,anchor.l,r.height,anchor.rotated,'high');
+    } else if(anchor) result.warnings.push(id+': ölçüler/yön değişti; yüksek kenar hizalaması yeniden uygulanmalı.');
+    const p=result.placements.length;
+    const box={...c,id,rowId:r.id,name:r.name,color:r.color,weight:r.weight??null,stackable:false,palletIndex:p,touchedPallets:[p],localY:c.y,y:c.y+p*PMC.length,overhangCm:Math.max(...Object.values(c.overhang)),reviewRequired:true,supportId:null,supportIds:[],candidates,rationale:`${c.positionCount} şematik pozisyon; ${c.alignment==='high'?'yüksek kontur kenarına hizalı; mevcut boyuna konum ve dönüş korundu':alignment==='auto'?'izin verilen dönüşlerde en az pozisyon, eşitlikte döndürmeden ve ortalı yerleşim':'kullanıcının seçtiği yerleşim'}. Ağırlık merkezi optimizasyonu yapılmadı.`};
     result.placements.push(box);result.pallets.push({index:p,items:[box]});
     result.summary.positionCount+=c.positionCount;result.summary.knownWeightKg+=r.weight??0;result.summary.unknownWeightCount+=r.weight==null?1:0;
   }

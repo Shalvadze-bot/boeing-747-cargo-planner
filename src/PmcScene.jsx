@@ -100,7 +100,7 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
         ];})}
         {dimension(point(0,first*L-24),point(W,first*L-24),'96″ / 243,84 cm · X','dim-x')}
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}
-        {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'96″ / 243,84 cm · Z','dim-z')}
+        {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'Yüksek kenar\n96″ / 243,84 cm · Z','dim-z')}
         {showContour && camera.pitch<1.4 && <>
           {dimension(point(highX,first*L-24,H+14),point(shoulderX,first*L-24,H+14),'Düz üst\n39,5″ / 100,33 cm','dim-flat')}
           {dimension(point(lowDimX,first*L-24,0),point(lowDimX,first*L-24,104.14),'Alçak kenar\n41″ / 104,14 cm','dim-low')}

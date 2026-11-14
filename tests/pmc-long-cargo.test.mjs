@@ -17,3 +17,15 @@ test('test mode cannot bypass transfer protection even without overhang',()=>{as
 
 test('front/rear align opposite LONG edges with inset and distinct x coordinates',()=>{const front=runLongCargo([row],{longCargoAlignment:'front'}).placements[0],rear=runLongCargo([row],{longCargoAlignment:'rear'}).placements[0];assert.equal(front.x,8.5);assert.equal(rear.x,147.34);assert.equal(rear.x+rear.w,235.34);assert.equal(front.localY,rear.localY);assert.equal(front.overhang.front,41.25);assert.equal(rear.overhang.rear,41.25);assert.notEqual(front.x,rear.x);});
 test('short edge options retain8.5cm inset and longitudinal overhang',()=>{const l=runLongCargo([row],{longCargoAlignment:'left'}).placements[0],r=runLongCargo([row],{longCargoAlignment:'right'}).placements[0];assert.equal(l.localY,8.5);assert.equal(r.localY+r.l,309);assert.equal(l.overhang.rear,91);assert.equal(r.overhang.front,91);});
+test('high edge preserves longitudinal overhang and rotation in both contour directions',()=>{
+ const before=runLongCargo([row],{longCargoAlignment:'right'}).placements[0];
+ const highEdgeAnchors={[before.id]:{y:before.localY,w:before.w,l:before.l,h:before.h,rotated:before.rotated}};
+ for(const mirrored of [false,true]){
+  const after=runLongCargo([row],{longCargoAlignment:'right',highEdgeAnchors,mirrored}).placements[0];
+  assert.equal(after.x,mirrored?147.34:8.5);assert.equal(after.localY,-91);assert.equal(after.overhang.front,91);assert.equal(after.overhang.rear,0);assert.equal(after.rotated,before.rotated);assert.equal(after.physicalPmcCount,1);assert.equal(after.flightApproved,false);assert.equal(after.alignment,'high');
+ }
+});
+test('changed dimensions invalidate high-edge snapshot instead of retaining stale shape',()=>{
+ const result=runLongCargo([{...row,width:90}],{highEdgeAnchors:{'long:1':{y:-91,w:88,l:400,h:166,rotated:false}}});
+ assert.equal(result.placements[0].w,90);assert.notEqual(result.placements[0].alignment,'high');assert.ok(result.warnings.some(w=>w.includes('yeniden uygulanmalı')));
+});

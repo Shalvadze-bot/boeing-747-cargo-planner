@@ -42,7 +42,7 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  assert.equal(diagram.querySelector('.pmc-base-clearance path').getAttribute('d'),`M${45+210*8.5/243.84} 170 H${255-210*8.5/243.84}`);
  assert.equal([...diagram.querySelectorAll('path')].some(p=>p.getAttribute('d')==='M55 163 V45 H128 L245 117 V163 Z'),false);
  const dims=[...document.querySelectorAll('.pmc-scene-dimension text')].map(n=>n.textContent);
- assert.deepEqual(dims,['96″ / 243,84 cm · X','125″ / 317,5 cm · Y','96″ / 243,84 cm · Z','Düz üst39,5″ / 100,33 cm','Alçak kenar41″ / 104,14 cm']);
+ assert.deepEqual(dims,['96″ / 243,84 cm · X','125″ / 317,5 cm · Y','Yüksek kenar96″ / 243,84 cm · Z','Düz üst39,5″ / 100,33 cm','Alçak kenar41″ / 104,14 cm']);
  // Measurement visibility is display-only and independent from cargo labels/contour.
  const facesBefore=[...document.querySelectorAll('.pmc-scene-box')].map(n=>n.getAttribute('points'));
  const labelsBefore=document.querySelectorAll('.pmc-scene-item-label text').length;
