@@ -116,6 +116,19 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  assert.equal(document.querySelectorAll('.cargo-import fieldset').length,0);
 });
 
+test('high edge dropdown preserves longitudinal placement and clears on alternate choice',async()=>{
+ localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows:[{id:'long',name:'Long',length:400,width:88,height:166,quantity:1,weight:25,allowRotation:false,stackable:false}],config:{maxPallets:6,longCargo:true,longCargoAlignment:'right',mirrored:true}}));
+ await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'high-dropdown'}));await pause();});await act(pause);
+ assert.equal(button('Yüksek kenara hizala'),undefined);
+ const select=field('Yerleşim seçimi');assert.ok(select.querySelector('option[value="high"]'));
+ await change(select,'high');
+ assert.equal(select.value,'high');
+ assert.match(document.querySelector('.pmc-long-details').textContent,/Yüksek kenara hizalı/);
+ assert.match(document.querySelector('.pmc-long-details').textContent,/sol kısa kenar 91 cm/);
+ const saved=JSON.parse(localStorage.getItem('cargo-pmc-v1'));assert.equal(saved.config.highEdgeAnchors['long:1'].y,-91);
+ await change(select,'center');assert.equal(select.value,'center');assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.highEdgeAnchors,null);
+});
+
 test('worker normalizes edited numeric strings and rejects invalid inputs',()=>{
  let response;activeWorker={onmessage:({data})=>response=data};
  self.onmessage({data:{rows:[{id:'test',name:'Test',length:'100',width:'80',height:'50',quantity:'2',weight:'',stackable:false,allowRotation:false}],config:{maxPallets:'2',mirrored:false,allowOverhang:false,maxOverhangCm:'',minOverhangHeightCm:''}}});
