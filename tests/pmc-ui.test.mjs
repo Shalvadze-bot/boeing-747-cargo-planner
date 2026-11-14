@@ -134,7 +134,11 @@ test('manual X controls and mouse/touch drag preserve Y and camera while clampin
  await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'manual-move'}));await pause();});await act(pause);
  await click(document.querySelector('.pmc-move-controls input[type=checkbox]'));
  await act(async()=>document.querySelector('.pmc-scene-item-label').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
+ await change(field('Yatay X (cm)'),'1');
+ assert.equal(field('Yatay X (cm)').value,'1');
+ assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.manualXAnchors,undefined);
  await change(field('Yatay X (cm)'),'100');
+ await act(async()=>field('Yatay X (cm)').dispatchEvent(new dom.window.FocusEvent('focusout',{bubbles:true})));
  let saved=JSON.parse(localStorage.getItem('cargo-pmc-v1'));assert.equal(saved.config.manualXAnchors['long:1'].x,100);assert.equal(saved.config.manualXAnchors['long:1'].y,-91);
  await change(field('Yükü yatay taşı'),'120');
  assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.manualXAnchors['long:1'].x,120);
@@ -147,6 +151,7 @@ test('manual X controls and mouse/touch drag preserve Y and camera while clampin
   saved=JSON.parse(localStorage.getItem('cargo-pmc-v1'));assert.equal(saved.config.manualXAnchors['long:1'].x,147.34);assert.equal(saved.config.manualXAnchors['long:1'].y,-91);
   assert.equal(document.querySelector('.pmc-scene-contour').innerHTML,contourBefore);
   await change(field('Yatay X (cm)'),'100');
+ await act(async()=>field('Yatay X (cm)').dispatchEvent(new dom.window.FocusEvent('focusout',{bubbles:true})));
  }
  assert.match(document.querySelector('.pmc-move-controls').textContent,/Yüksek kenara kalan hareket/);
  assert.match(document.querySelector('.pmc-long-details').textContent,/sol kısa kenar 91 cm/);

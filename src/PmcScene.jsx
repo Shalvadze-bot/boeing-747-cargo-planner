@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import './pmc-scene.css';
 import {lateralBounds} from './pmc-long-cargo.mjs';
 import {contourHeight} from './pmc-engine.mjs';
@@ -25,6 +25,7 @@ function cuboid(x, y, z, w, l, h) {
 
 export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
   const [moveMode,setMoveMode]=useState(false);
+  const [xDraft,setXDraft]=useState('');
   const moveOrigins=useRef({});
   const id = useId().replace(/:/g, '');
   const [camera, setCamera] = useState(ISO);
@@ -36,6 +37,8 @@ export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1
   const indices = selectedPallet == null ? Array.from({length: count}, (_, i) => i) : [selectedPallet];
   const visible = placements.filter(p => selectedPallet == null || p.palletIndex === selectedPallet || p.touchedPallets?.includes(selectedPallet) || (!p.overhang && p.y < (selectedPallet + 1) * L && p.y + p.l > selectedPallet * L));
   const selected = placements.find(p => p.id === selectedItemId);
+  useEffect(()=>{setXDraft(selected?String(Number(selected.x.toFixed(2))):'');},[selected?.id,selected?.x]);
+  function commitX(){if(xDraft.trim()!=='' && Number.isFinite(Number(xDraft)) && limits?.valid){const x=Math.max(limits.min,Math.min(limits.max,Number(xDraft)));moveTo(x);setXDraft(String(Number(x.toFixed(2))));}else setXDraft(selected?String(Number(selected.x.toFixed(2))):'');}
   const limits=selected?lateralBounds(selected,mirrorContour):null;
   const validPosition=limits?.valid && selected.x>=limits.min-1e-6 && selected.x<=limits.max+1e-6;
   const units=n=>`${fmt(n)} cm / ${fmt(n/2.54)} in`;
@@ -88,7 +91,7 @@ export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1
         <p>{selected.name} · Boyuna konum, taşma ve dönüş korunur.</p>
         {!limits?.valid?<p role="alert">Bu yük için kontur ve 8,5 cm taban sınırları içinde yatay yerleşim yok. {limits?.reason}</p>:<>
           {!validPosition && <p role="alert">Mevcut konum şematik kontur/taban sınırı dışında. Kontrolü kullanarak geçerli aralığa taşıyın.</p>}
-          <label>Yatay X (cm)<input aria-label="Yatay X (cm)" type="number" step="0.1" min={limits.min} max={limits.max} value={Number(selected.x.toFixed(2))} onChange={e=>{if(e.target.value!=='')moveTo(Number(e.target.value));}}/></label>
+          <label>Yatay X (cm)<input aria-label="Yatay X (cm)" type="number" step="0.1" min={limits.min} max={limits.max} value={xDraft} onChange={e=>setXDraft(e.target.value)} onBlur={commitX} onKeyDown={e=>{if(e.key==='Enter'){commitX();e.currentTarget.blur();}if(e.key==='Escape')setXDraft(String(Number(selected.x.toFixed(2))));}}/></label>
           <input aria-label="Yükü yatay taşı" type="range" step="0.01" min={limits.min} max={limits.max} value={Math.max(limits.min,Math.min(limits.max,selected.x))} onChange={e=>moveTo(Number(e.target.value))}/>
           <p>Hareket: {units(selected.x-(moveOrigins.current[selected.id]??selected.x))} · Pozitif X fiziksel sağa</p>
           <p>Yüksek kenara kalan hareket: {validPosition?units(mirrorContour?limits.max-selected.x:selected.x-limits.min):'geçersiz konum'} · Alçak kenara kalan hareket: {validPosition?units(mirrorContour?selected.x-limits.min:limits.max-selected.x):'geçersiz konum'}</p>
