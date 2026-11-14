@@ -20,7 +20,8 @@ test('measurement toggle hides long-cargo overhang dimensions without altering g
  assert.equal(off.querySelectorAll('[data-dimension]').length,0);
  assert.deepEqual([...off.querySelectorAll('.pmc-scene-box')].map(n=>n.getAttribute('points')),[...on.querySelectorAll('.pmc-scene-box')].map(n=>n.getAttribute('points')));
  assert.equal(off.querySelectorAll('.pmc-scene-contour').length,on.querySelectorAll('.pmc-scene-contour').length);
- assert.match(off.querySelector('.pmc-scene-canvas').textContent,/ÖN UZUN/);
+ assert.doesNotMatch(off.querySelector('.pmc-scene-canvas').textContent,/ÖN UZUN|ARKA UZUN/);
+ assert.doesNotMatch(on.querySelector('.pmc-scene-canvas').textContent,/ÖN UZUN|ARKA UZUN/);
  assert.doesNotMatch(off.querySelector('.pmc-scene-canvas').textContent,/X=243,84/);
  assert.equal(off.querySelectorAll('.pmc-scene-item-label text').length,1);
  assert.match(off.querySelector('.pmc-scene-legend').textContent,/8,5 cm/);
