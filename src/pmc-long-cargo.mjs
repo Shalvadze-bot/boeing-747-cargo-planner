@@ -5,14 +5,15 @@ export const TECHNICAL_CHECKS = ['Kapı açıklığı ve kapıdan geçiş','Uça
 export function longCargoCandidates(row) {
   const variants=row.allowRotation?[[row.width,row.length,false],[row.length,row.width,true]]:[[row.width,row.length,false]];
   return variants.flatMap(([w,l,rotated])=>['center','front','rear','left','right'].map(alignment=>{
-    const x=alignment==='left'?0:alignment==='right'?PMC.width-w:(PMC.width-w)/2;
-    const y=alignment==='front'?0:alignment==='rear'?PMC.length-l:(PMC.length-l)/2;
+    const x=alignment==='left'?PMC.margin:alignment==='right'?PMC.width-PMC.margin-w:(PMC.width-w)/2;
+    const y=alignment==='front'?PMC.margin:alignment==='rear'?PMC.length-PMC.margin-l:(PMC.length-l)/2;
     const x0=Math.floor((x+EPS)/PMC.width),x1=Math.ceil((x+w-EPS)/PMC.width)-1;
     const y0=Math.floor((y+EPS)/PMC.length),y1=Math.ceil((y+l-EPS)/PMC.length)-1;
     const positions=[];
     for(let iy=y0;iy<=y1;iy++)for(let ix=x0;ix<=x1;ix++)positions.push({x:ix,y:iy,id:`S(${ix},${iy})`,support:ix===0&&iy===0});
     const overhang={left:Math.max(0,-x),right:Math.max(0,x+w-PMC.width),front:Math.max(0,-y),rear:Math.max(0,y+l-PMC.length)};
-    return {x,y,w,l,h:row.height,z:0,rotated,alignment,positions,overhang,physicalPmcCount:1,positionCount:positions.length,blockedPositions:positions.filter(p=>!p.support),status:'TECHNICAL_VALIDATION_PENDING',flightApproved:false};
+    const usableBoundaryExcess={left:Math.max(0,PMC.margin-x),right:Math.max(0,x+w-(PMC.width-PMC.margin)),front:Math.max(0,PMC.margin-y),rear:Math.max(0,y+l-(PMC.length-PMC.margin))};
+    return {usableBoundaryExcess,x,y,w,l,h:row.height,z:0,rotated,alignment,positions,overhang,physicalPmcCount:1,positionCount:positions.length,blockedPositions:positions.filter(p=>!p.support),status:'TECHNICAL_VALIDATION_PENDING',flightApproved:false};
   }));
 }
 export function runLongCargo(rows,config={}) {

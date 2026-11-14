@@ -131,7 +131,7 @@ Uçak yük listesinde bir PMC paletini seçip **Yalnız bu PMC’yi görsel öni
 
 ### Tek PMC üzerinde uzun yük — test önizlemesi
 
-Yeni açık seçim, bir parçayı bir fiziksel PMC üzerinde ortalı veya ön/arka/sol/sağ kenara hizalı gösterir. İzin verilen 90° dönüşler ayrıca karşılaştırılır. Fiziksel kenardan taşma cm ve inç olarak 3D üzerinde ölçülür; 8,5 cm taban boşluğu yükseklikten çıkarılmaz.
+Yeni açık seçim, bir parçayı bir fiziksel PMC üzerinde ortalı veya ön/arka/sol/sağ kenara hizalı gösterir. İzin verilen 90° dönüşler ayrıca karşılaştırılır. Hizalanan, taşmayan kenarda 8,5 cm taban boşluğu korunur. Net kullanılabilir sınır aşımı fiziksel kenar taşmasından ayrı gösterilir. Fiziksel kenardan taşma cm ve inç olarak 3D üzerinde ölçülür; 8,5 cm taban boşluğu yükseklikten çıkarılmaz.
 
 Bu modda her parça bağımsız, istifsiz bir test senaryosudur. S(x,y) alanları eşit fiziksel PMC adımlı şematik hücrelerdir, gerçek uçak pozisyonları değildir. Taşmanın kapladığı komşu hücreler BOŞ BIRAK olarak işaretlenir; yeni plaka veya yinelenen ağırlık oluşturulmaz. Birden fazla parçanın pozisyon toplamı bağımsız senaryoların toplamıdır, ortak uçak yük planı değildir. Bu mod için uçak planına aktarım hem arayüzde hem aktarım fonksiyonunda kapalıdır.
 
