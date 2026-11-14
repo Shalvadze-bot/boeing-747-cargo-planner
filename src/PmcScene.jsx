@@ -21,7 +21,7 @@ function cuboid(x, y, z, w, l, h) {
   ];
 }
 
-export default function PmcScene({ placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, heightCut = Infinity }) {
+export default function PmcScene({ placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
   const id = useId().replace(/:/g, '');
   const [camera, setCamera] = useState(ISO);
   const [zoom, setZoom] = useState(1);
@@ -61,7 +61,7 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
   const select = item => { if (!moved.current) onSelectItem?.(item.id); };
   const reset = () => {setCamera(ISO);setZoom(1);};
   function line(a,b,props={}) { const p=project(a),q=project(b);return <line x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]} {...props}/>; }
-  function dimension(a,b,text,key) { const p=project(a),q=project(b), mid=[(p[0]+q[0])/2,(p[1]+q[1])/2], lines=text.split("\n");return <g key={key} className="pmc-scene-dimension" data-dimension={key} aria-label={lines.join(" ")}>{line(a,b,{markerStart:`url(#${id}-arrow)`,markerEnd:`url(#${id}-arrow)`})}<text x={mid[0]} y={mid[1]-9-(lines.length-1)*13} textAnchor="middle">{lines.map((part,i)=><tspan key={i} x={mid[0]} dy={i?13:0}>{part}</tspan>)}</text></g>; }
+  function dimension(a,b,text,key) { if (!showDimensions) return null; const p=project(a),q=project(b), mid=[(p[0]+q[0])/2,(p[1]+q[1])/2], lines=text.split("\n");return <g key={key} className="pmc-scene-dimension" data-dimension={key} aria-label={lines.join(" ")}>{line(a,b,{markerStart:`url(#${id}-arrow)`,markerEnd:`url(#${id}-arrow)`})}<text x={mid[0]} y={mid[1]-9-(lines.length-1)*13} textAnchor="middle">{lines.map((part,i)=><tspan key={i} x={mid[0]} dy={i?13:0}>{part}</tspan>)}</text></g>; }
   const first = indices[0];
   // Labels follow the same mirrored physical contour, not the inset base.
   const highX=mirrorContour?W:0, shoulderX=mirrorContour?W-100.33:100.33, lowX=mirrorContour?0:W;
@@ -98,7 +98,7 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
           o.left>0 && dimension(point(b.x,base+L/2,b.h+12),point(0,base+L/2,b.h+12),t('Ön uzun',o.left),`${b.id}-overhang-left`),
           o.right>0 && dimension(point(W,base+L/2,b.h+12),point(b.x+b.w,base+L/2,b.h+12),t('Arka uzun',o.right),`${b.id}-overhang-right`)
         ];})}
-        {visible.some(b=>b.alignment) && <g className="pmc-scene-pallet-label">{[[0,first*L+L/2,'ÖN UZUN · X=0'],[W,first*L+L/2,'ARKA UZUN · X=243,84']].map(([x,y,text])=>{const p=project(point(x,y,-10));return <text key={text} x={p[0]+(x===0?-12:12)} y={p[1]} textAnchor={x===0?'end':'start'}>{text}</text>;})}</g>}
+        {visible.some(b=>b.alignment) && <g className="pmc-scene-pallet-label">{[[0,first*L+L/2,showDimensions?'ÖN UZUN · X=0':'ÖN UZUN'],[W,first*L+L/2,showDimensions?'ARKA UZUN · X=243,84':'ARKA UZUN']].map(([x,y,text])=>{const p=project(point(x,y,-10));return <text key={text} x={p[0]+(x===0?-12:12)} y={p[1]} textAnchor={x===0?'end':'start'}>{text}</text>;})}</g>}
         {dimension(point(0,first*L-24),point(W,first*L-24),'96″ / 243,84 cm · X','dim-x')}
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}
         {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'96″ / 243,84 cm · Z','dim-z')}

@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {mkdir,rm} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {JSDOM} from 'jsdom';
+import {runLongCargo} from '../src/pmc-long-cargo.mjs';
+const output=resolve('node_modules/.cache/pmc-dimensions-'+process.pid+'.mjs');
+await mkdir(resolve('node_modules/.cache'),{recursive:true});
+await build({entryPoints:['src/PmcScene.jsx'],outfile:output,bundle:true,packages:'external',format:'esm',platform:'node',jsx:'automatic',loader:{'.css':'empty'}});
+const {default:Scene}=await import(pathToFileURL(output));
+test('measurement toggle hides long-cargo overhang dimensions without altering geometry or other labels',()=>{
+ const r=runLongCargo([{id:'test',name:'Long cargo',width:88,length:400,height:166,quantity:1,weight:25,allowRotation:false}],{longCargoAlignment:'rear'});
+ const draw=showDimensions=>new JSDOM(renderToStaticMarkup(React.createElement(Scene,{placements:r.placements,showDimensions}))).window.document;
+ const on=draw(true),off=draw(false);
+ assert.equal(on.querySelectorAll('[data-dimension*="overhang"]').length,2);
+ assert.equal(off.querySelectorAll('[data-dimension]').length,0);
+ assert.deepEqual([...off.querySelectorAll('.pmc-scene-box')].map(n=>n.getAttribute('points')),[...on.querySelectorAll('.pmc-scene-box')].map(n=>n.getAttribute('points')));
+ assert.equal(off.querySelectorAll('.pmc-scene-contour').length,on.querySelectorAll('.pmc-scene-contour').length);
+ assert.match(off.querySelector('.pmc-scene-canvas').textContent,/ÖN UZUN/);
+ assert.doesNotMatch(off.querySelector('.pmc-scene-canvas').textContent,/X=243,84/);
+ assert.equal(off.querySelectorAll('.pmc-scene-item-label text').length,1);
+ assert.match(off.querySelector('.pmc-scene-legend').textContent,/8,5 cm/);
+});
+await rm(output,{force:true});
