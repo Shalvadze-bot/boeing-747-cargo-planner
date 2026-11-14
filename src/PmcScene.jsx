@@ -98,7 +98,6 @@ export default function PmcScene({ placements = [], palletCount = 1, selectedPal
           o.left>0 && dimension(point(b.x,base+L/2,b.h+12),point(0,base+L/2,b.h+12),t('Ön uzun',o.left),`${b.id}-overhang-left`),
           o.right>0 && dimension(point(W,base+L/2,b.h+12),point(b.x+b.w,base+L/2,b.h+12),t('Arka uzun',o.right),`${b.id}-overhang-right`)
         ];})}
-        {visible.some(b=>b.alignment) && <g className="pmc-scene-edge-label">{[[0,first*L+L/2,showDimensions?'SOL UZUN · X=0':'SOL UZUN'],[W,first*L+L/2,showDimensions?'SAĞ UZUN · X=243,84':'SAĞ UZUN']].map(([x,y,text])=>{const p=project(point(x,y,-10));return <text key={text} x={p[0]+(x===0?-12:12)} y={p[1]} textAnchor={x===0?'end':'start'}>{text}</text>;})}</g>}
         {dimension(point(0,first*L-24),point(W,first*L-24),'96″ / 243,84 cm · X','dim-x')}
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}
         {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'96″ / 243,84 cm · Z','dim-z')}
