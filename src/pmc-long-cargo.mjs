@@ -1,4 +1,4 @@
-import {PMC} from './pmc-engine.mjs';
+import {PMC,orientations,ORIENTATION_MODES} from './pmc-engine.mjs';
 const EPS=1e-6;
 export const TECHNICAL_CHECKS = ['Kapı açıklığı ve kapıdan geçiş','Uçak içinde dönüş ve yerleştirme yolu','Gerçek pozisyon aralıkları ve konturları','Yükün desteği ve sehim/dayanım','Ağırlık merkezi ve devrilme','PMC, pozisyon ve zemin yük limitleri','Bağlama ve operatör onayı'];
 /** Allowed transverse origin for a rectangular box under the UNVERIFIED schematic profile.
@@ -17,11 +17,11 @@ export function lateralBounds(box,mirrored=false) {
 }
 /** Schematic equal-pitch positions only, NOT aircraft loading approval. */
 export function longCargoCandidates(row) {
-  const variants=row.allowRotation?[[row.width,row.length,false],[row.length,row.width,true]]:[[row.width,row.length,false]];
-  return variants.flatMap(([w,l,rotated])=>['center','front','rear','left','right'].map(alignment=>{
+  const variants=orientations(row);
+  return variants.flatMap(([w,l,h,face])=>['center','front','rear','left','right'].map(alignment=>{
     const x=alignment==='front'?PMC.margin:alignment==='rear'?PMC.width-PMC.margin-w:(PMC.width-w)/2;
     const y=alignment==='left'?PMC.margin:alignment==='right'?PMC.length-PMC.margin-l:(PMC.length-l)/2;
-    return placementGeometry(x,y,w,l,row.height,rotated,alignment);
+    return {...placementGeometry(x,y,w,l,h,w!==row.width,alignment),orientationFace:face};
   }));
 }
 function placementGeometry(x,y,w,l,h,rotated,alignment) {
@@ -38,6 +38,7 @@ export function runLongCargo(rows,config={}) {
   if(!Array.isArray(rows)||rows.length>100){result.errors.push('En fazla 100 yük satırı.');return result;}
   const count=rows.reduce((s,r)=>s+r.quantity,0);
   if(!Number.isInteger(count)||count>200||rows.some(r=>!Number.isInteger(r.quantity)||r.quantity<1||['width','length','height'].some(k=>!Number.isFinite(r[k])||r[k]<=0||r[k]>10000)||(r.weight!=null&&(!Number.isFinite(r.weight)||r.weight<=0)))){result.errors.push('Geçerli pozitif ölçüler (en fazla 10.000 cm), adet (toplam en fazla 200) ve varsa ağırlık girin.');return result;}
+  if(rows.some(r=>(r.orientationMode!=null&&!ORIENTATION_MODES.includes(r.orientationMode)) || (r.pieceOrientations!=null&&(typeof r.pieceOrientations!=='object'||Array.isArray(r.pieceOrientations)||Object.values(r.pieceOrientations).some(v=>!ORIENTATION_MODES.includes(v)))))){result.errors.push('Yön izni geçersiz.');return result;}
   if(new Set(rows.map(r=>r.id)).size!==rows.length){result.errors.push('Yük kimlikleri benzersiz olmalı.');return result;}
   const max=Number(config.maxPallets??6);
   if(!Number.isInteger(max)||max<1||max>30){result.errors.push('Fiziksel PMC sınırı 1–30 olmalı.');return result;}
@@ -46,21 +47,21 @@ export function runLongCargo(rows,config={}) {
   for(const r of rows)for(let i=0;i<r.quantity;i++){
     const id=`${r.id}:${i+1}`;result.summary.requestedCount++;
     if(result.placements.length>=max){result.unplaced.push({id,name:r.name,reason:'Her parça için ayrı tek destek PMC test senaryosu: fiziksel PMC sınırına ulaşıldı.'});continue;}
-    const candidates=longCargoCandidates(r);
+    const candidates=longCargoCandidates({...r,orientationMode:r.pieceOrientations?.[i+1]??r.orientationMode??'upright'});
     const pool=candidates.filter(c=>alignment==='auto'||c.alignment===alignment);
     pool.sort((a,b)=>a.positionCount-b.positionCount||Number(a.rotated)-Number(b.rotated)||(['center','front','rear','left','right'].indexOf(a.alignment)-['center','front','rear','left','right'].indexOf(b.alignment)));
     let c=pool[0];
     const anchor=config.highEdgeAnchors?.[id];
-    if(anchor && Number.isFinite(anchor.y) && Math.abs(anchor.y)<=10000 && anchor.y<PMC.length && anchor.y+anchor.l>0 && anchor.h===r.height && candidates.some(v=>v.w===anchor.w && v.l===anchor.l && v.rotated===anchor.rotated)){
-      c=placementGeometry(config.mirrored?PMC.width-PMC.margin-anchor.w:PMC.margin,anchor.y,anchor.w,anchor.l,r.height,anchor.rotated,'high');
+    if(anchor && Number.isFinite(anchor.y) && Math.abs(anchor.y)<=10000 && anchor.y<PMC.length && anchor.y+anchor.l>0 && candidates.some(v=>v.w===anchor.w && v.l===anchor.l && v.h===anchor.h && v.rotated===anchor.rotated)){
+      c=placementGeometry(config.mirrored?PMC.width-PMC.margin-anchor.w:PMC.margin,anchor.y,anchor.w,anchor.l,anchor.h,anchor.rotated,'high');
     } else if(anchor) result.warnings.push(id+': ölçüler/yön değişti; yüksek kenar hizalaması yeniden uygulanmalı.');
     const manual=config.manualXAnchors?.[id];
     if(manual) {
-      const snapshotValid=Number.isFinite(manual.x)&&Number.isFinite(manual.y)&&Math.abs(manual.y)<=10000&&manual.y<PMC.length&&manual.y+manual.l>0&&manual.h===r.height&&candidates.some(v=>v.w===manual.w&&v.l===manual.l&&v.rotated===manual.rotated);
+      const snapshotValid=Number.isFinite(manual.x)&&Number.isFinite(manual.y)&&Math.abs(manual.y)<=10000&&manual.y<PMC.length&&manual.y+manual.l>0&&candidates.some(v=>v.w===manual.w&&v.l===manual.l&&v.h===manual.h&&v.rotated===manual.rotated);
       const bounds=snapshotValid?lateralBounds(manual,!!config.mirrored):null;
       if(bounds?.valid) {
         const x=Math.max(bounds.min,Math.min(bounds.max,manual.x));
-        c=placementGeometry(x,manual.y,manual.w,manual.l,r.height,manual.rotated,'manual');
+        c=placementGeometry(x,manual.y,manual.w,manual.l,manual.h,manual.rotated,'manual');
         if(Math.abs(x-manual.x)>EPS)result.warnings.push(id+': yan konum şematik kontur ve 8,5 cm taban sınırına kısıtlandı.');
       } else result.warnings.push(id+': elle yan konum uygulanmadı; '+(bounds?.reason||'ölçüler/yön değişti veya konum geçersiz; yeniden yerleştirin.'));
     }

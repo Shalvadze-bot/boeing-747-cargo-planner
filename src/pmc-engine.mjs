@@ -18,7 +18,18 @@ export function contourHeight(x,mirrored=false){const t=mirrored?PMC.width-x:x;r
 const positive=v=>typeof v==='number'&&Number.isFinite(v)&&v>0;
 const between=(a,b)=>a<=b+EPS;
 const overlaps=(a,b)=>a.x<b.x+b.w-EPS&&a.x+a.w>b.x+EPS&&a.y<b.y+b.l-EPS&&a.y+a.l>b.y+EPS&&a.z<b.z+b.h-EPS&&a.z+a.h>b.z+EPS;
-const orientations=r=>r.allowRotation&&r.width!==r.length?[[r.width,r.length],[r.length,r.width]]:[[r.width,r.length]];
+export const ORIENTATION_MODES = ['upright','side-width','side-length','all'];
+// A mode grants permission, not a guarantee; the heuristic tries the lowest
+// permitted height first. Horizontal rotation remains a separate permission.
+export function orientations(r) {
+ const mode=r.orientationMode || 'upright';
+ const faces=[[r.width,r.length,r.height,'upright']];
+ if(mode==='side-width'||mode==='all') faces.push([r.height,r.length,r.width,'side-width']);
+ if(mode==='side-length'||mode==='all') faces.push([r.width,r.height,r.length,'side-length']);
+ const variants=faces.flatMap(([w,l,h,face])=>r.allowRotation?[[w,l,h,face],[l,w,h,face]]:[[w,l,h,face]]);
+ const seen=new Set();
+ return variants.filter(([w,l,h])=>{const k=`${w}:${l}:${h}`;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>a[2]-b[2]);
+}
 const unique=a=>[...new Set(a.map(n=>Math.round(n*1e6)/1e6))];
 function validate(rows,config){
  const errors=[], c={...DEFAULT_CONFIG,...config};
@@ -35,6 +46,8 @@ function validate(rows,config){
  for(const k of ['length','width','height'])if(!positive(r[k]))errors.push(`${i+1}. satır ${{length:'uzunluk',width:'genişlik',height:'yükseklik'}[k]}: pozitif sonlu sayı gerekli.`);
  if(!Number.isInteger(r.quantity)||r.quantity<1||r.quantity>200)errors.push(`${i+1}. satır: adet 1–200 arasında tam sayı olmalı.`);else count+=r.quantity;
  if(r.weight!=null&&!positive(r.weight))errors.push(`${i+1}. satır: birim ağırlık pozitif sonlu sayı olmalı.`);
+ if(r.orientationMode!=null&&!ORIENTATION_MODES.includes(r.orientationMode))errors.push(`${i+1}. satır: yön izni geçersiz.`);
+ if(r.pieceOrientations!=null && (typeof r.pieceOrientations!=='object'||Array.isArray(r.pieceOrientations)||Object.entries(r.pieceOrientations).some(([i,v])=>!/^\d+$/.test(i)||+i<1||+i>200||!ORIENTATION_MODES.includes(v)))) errors.push(`${i+1}. satır: parça yön izni geçersiz.`);
  for(const k of ['stackable','allowRotation'])if(r[k]!=null&&typeof r[k]!=='boolean')errors.push(`${i+1}. satır ${k}: doğru/yanlış değeri gerekli.`);
  normalized.push({...r,id,name:String(r.name||`Yük ${i+1}`),stackable:r.stackable??true,allowRotation:r.allowRotation??true,color:r.color||COLORS[i%COLORS.length]});
  });
@@ -69,7 +82,7 @@ function* candidatePoints(grids,z){
   const active=grids.filter((g,i)=>mask&(1<<i));
   if(!xOrders.has(mask))xOrders.set(mask,[...new Set(active.flatMap(g=>[...g.xs]))].sort((a,b)=>a-b));
   const xs=xOrders.get(mask);
-  for(const x of xs)for(const g of active)if(g.xs.has(x))yield {x,y,z,w:g.w,l:g.l};
+  for(const x of xs)for(const g of active)if(g.xs.has(x))yield {x,y,z,w:g.w,l:g.l,h:g.h,face:g.face};
  }
 }
 function pack(items,c){
@@ -86,25 +99,25 @@ function pack(items,c){
   for(const z of levels){
    if(chosen)break;
    const surface=supports.filter(b=>Math.abs(b.z+b.h-z)<=EPS);
-   const edges=local.filter(b=>Math.abs(b.z+b.h-z)<=EPS||(b.z<z+item.height-EPS&&b.z+b.h>z+EPS));
-   const blockers=local.filter(b=>b.z<z+item.height-EPS&&b.z+b.h>z+EPS);
+   const maxH=Math.max(...orientations(item).map(v=>v[2]));
+   const edges=local.filter(b=>Math.abs(b.z+b.h-z)<=EPS||(b.z<z+maxH-EPS&&b.z+b.h>z+EPS));
    const rowBlockers=new Map(),rowSupports=new Map();
    const grids=[];
-   for(const [w,l] of orientations(item)){
+   for(const [w,l,h,face] of orientations(item)){
     const xs=unique([PMC.margin,PMC.width-PMC.margin-w,...edges.flatMap(b=>z===0?[b.x+b.w,b.x-w]:[b.x,b.x+b.w-w,b.x+b.w,b.x-w])])
      .filter(x=>between(PMC.margin,x)&&between(x+w,PMC.width-PMC.margin));
     const ys=unique([start,end-l,...edges.flatMap(b=>z===0?[b.y+b.l,b.y-l]:[b.y,b.y+b.l-l,b.y+b.l,b.y-l])])
      .filter(y=>between(start,y)&&(c.allowOverhang||between(y+l,end)));
-    grids.push({w,l,xs:new Set(xs),ys:new Set(ys)});
+    grids.push({w,l,h,face,xs:new Set(xs),ys:new Set(ys)});
    }
    // Walk ordered coordinates lazily: allocating and sorting every x/y pair
    // is costly for the supported 200-piece mixed-dimension workload.
    for(const a of candidatePoints(grids,z)){
-    if(!between(a.z+item.height,Math.min(contourHeight(a.x,c.mirrored),contourHeight(a.x+a.w,c.mirrored))))continue;
+    if(!between(a.z+a.h,Math.min(contourHeight(a.x,c.mirrored),contourHeight(a.x+a.w,c.mirrored))))continue;
     // Most edge combinations are occupied. Reject them before the more
     // expensive union-of-supports calculation, using every neighboring box.
-    const rowKey=`${a.y}:${a.l}`;
-    if(!rowBlockers.has(rowKey))rowBlockers.set(rowKey,blockers.filter(b=>a.y<b.y+b.l-EPS&&a.y+a.l>b.y+EPS));
+    const rowKey=`${a.y}:${a.l}:${a.h}`;
+    if(!rowBlockers.has(rowKey))rowBlockers.set(rowKey,local.filter(b=>b.z<a.z+a.h-EPS&&b.z+b.h>a.z+EPS&&a.y<b.y+b.l-EPS&&a.y+a.l>b.y+EPS));
     if(rowBlockers.get(rowKey).some(b=>a.x<b.x+b.w-EPS&&a.x+a.w>b.x+EPS))continue;
     const overhang=Math.max(0,a.y+a.l-end);let touched=[p],supportIds=[];
     if(overhang>EPS){
@@ -123,7 +136,7 @@ function pack(items,c){
      if(!support.fullySupported)continue;
      supportIds=support.supportIds;
     }
-    const box={id:item.instanceId,rowId:item.id,name:item.name,color:item.color,x:a.x,y:a.y,z:a.z,w:a.w,l:a.l,h:item.height,weight:item.weight??null,stackable:item.stackable,palletIndex:p,touchedPallets:touched,overhangCm:overhang,reviewRequired:overhang>EPS,supportIds,supportId:supportIds.length===1?supportIds[0]:null,rotated:Math.abs(a.w-item.width)>EPS};
+    const box={id:item.instanceId,rowId:item.id,name:item.name,color:item.color,x:a.x,y:a.y,z:a.z,w:a.w,l:a.l,h:a.h,orientationFace:a.face,weight:item.weight??null,stackable:item.stackable,palletIndex:p,touchedPallets:touched,overhangCm:overhang,reviewRequired:overhang>EPS,supportIds,supportId:supportIds.length===1?supportIds[0]:null,rotated:Math.abs(a.w-item.width)>EPS};
     if(overhang>EPS&&placements.some(b=>overlaps(box,b)))continue;
     chosen=box;break;
    }
@@ -146,7 +159,7 @@ export function runPacking(inputRows,config={}){
  const warnings=['SIMÜLASYON: ZX-11 görseli sertifikalı limit değildir. Uçak uyumu, ağırlık merkezi, dayanım, sabitleme ve operatör onayı ayrıca doğrulanmalıdır.','Sezgisel yerleşim: en az palet sayısı veya en iyi yerleşim garanti edilmez.','Palet taşıma kapasitesi ve taban yükü limiti uygulanmaz; ağırlık yalnızca bilgilendirme toplamıdır.','Üst üste yerleşimde aynı yükseklikteki bir veya birden fazla istiflenebilir kutunun ortak yüzeyi tam taban desteği sağlamalıdır. Bu yalnızca geometrik destektir; ezilme dayanımı ve yük taşıma kapasitesi hesaplanmaz.'];
  const result={config:c,profile:{...PROFILE,mirrored:c.mirrored},errors,warnings,placements:[],pallets:[],unplaced:[],summary:{requestedCount:0,placedCount:0,unplacedCount:0,palletCount:0,volumeM3:0,knownWeightKg:0,unknownWeightCount:0,overhangCount:0}};
  if(errors.length)return result;
- const items=rows.flatMap(r=>Array.from({length:r.quantity},(_,i)=>({...r,instanceId:`${r.id}:${i+1}`})));
+ const items=rows.flatMap(r=>Array.from({length:r.quantity},(_,i)=>({...r,orientationMode:r.pieceOrientations?.[i+1]??r.orientationMode??'upright',instanceId:`${r.id}:${i+1}`})));
  const orders=[(a,b)=>b.length*b.width*b.height-a.length*a.width*a.height,(a,b)=>b.height-a.height||b.width*b.length-a.width*a.length,(a,b)=>b.width*b.length-a.width*a.length||b.height-a.height];
  let best=null;
  for(const sort of orders){const run=pack([...items].sort(sort),c);if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;}
