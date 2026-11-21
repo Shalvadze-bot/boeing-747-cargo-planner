@@ -173,9 +173,9 @@ function originOptions(range, preferred, fixed, blockers, supports, axis, sizeKe
   return [...options].sort((a,b) => Math.abs(a-preferred)-Math.abs(b-preferred));
 }
 
-function findOrigin(choice, bounds, blockers, supports, {bias,compact,z}) {
+function findOrigin(choice, bounds, blockers, supports, {bias,z}) {
   const preferredX = choice.fixedX ? choice.x : bias==='high-x' ? bounds.x.max : bias==='low-x' ? bounds.x.min : choice.x;
-  const preferredY = !choice.fixedY && compact && blockers.length ? bounds.y.min : choice.y;
+  const preferredY = !choice.fixedY && bias && blockers.length ? bounds.y.min : choice.y;
   const xs = originOptions(bounds.x,preferredX,choice.fixedX,blockers,supports,'x','w',choice.w);
   const ys = originOptions(bounds.y,preferredY,choice.fixedY,blockers,supports,'y','l',choice.l);
   for (const y of ys) {
@@ -201,7 +201,7 @@ function compareScore(a,b) {
   return 0;
 }
 
-function fitItem(item, pallet, {bias,compact=false,z=0,mirrored=false} = {}) {
+function fitItem(item, pallet, {bias,z=0,mirrored=false} = {}) {
   let best = null;
   let bestScore;
   const supports = z > EPS ? pallet.boxes.filter(box => box.stackable && Math.abs(box.z+box.h-z)<=EPS) : [];
@@ -210,17 +210,13 @@ function fitItem(item, pallet, {bias,compact=false,z=0,mirrored=false} = {}) {
     const bounds = z > EPS ? placementBounds(choice,mirrored,z) : floorBounds;
     if (!bounds || (choice.fixedX && !within(choice.x,bounds.x))) continue;
     const blockers = pallet.boxes.filter(box => overlap(z,choice.h,box.z,box.h));
-    // The whole-plan trials vary the transverse start while keeping the
-    // selected end alignment and the established oversized-width offsets.
-    const canPreferEdge = !choice.fixedX && choice.w<=PMC.usableWidth && choice.alignment!=='high';
-    const xBias = compact || canPreferEdge ? bias : undefined;
-    const box = findOrigin(choice,bounds,blockers,supports,{bias:xBias,compact,z});
+    const box = findOrigin(choice,bounds,blockers,supports,{bias,z});
     if (!box) continue;
     const positions = positionsFor(box);
     const added = positions.reduce((n,position) => n + Number(!pallet.reserved.has(position.id)),0);
     const score = [
       added,positions.length,Number(choice.rotated),
-      xBias==='high-x' ? -box.x : xBias==='low-x' ? box.x : 0,
+      bias==='high-x' ? -box.x : bias==='low-x' ? box.x : 0,
       ALIGNMENTS.indexOf(choice.alignment),
     ];
     if (!best || compareScore(score,bestScore)<0) {
@@ -249,7 +245,7 @@ function rearrangePallet(pallet, item, mirrored) {
   for (const bias of biases) {
     const rearranged = emptyPallet();
     for (const queued of items) {
-      const box = fitItem(queued, rearranged, {bias,compact:true});
+      const box = fitItem(queued, rearranged, {bias});
       if (!box) break;
       addToPallet(rearranged, box);
     }
@@ -258,16 +254,16 @@ function rearrangePallet(pallet, item, mirrored) {
   return null;
 }
 
-function fitAboveFloor(item, pallet, mirrored, bias) {
+function fitAboveFloor(item, pallet, mirrored) {
   const levels = [...new Set(pallet.boxes.filter(box => box.stackable).map(box => box.z+box.h))].sort((a,b)=>a-b);
   for (const z of levels) {
-    const box = fitItem(item,pallet,{z,mirrored,bias});
+    const box = fitItem(item,pallet,{z,mirrored});
     if (box) return box;
   }
   return null;
 }
 
-function groupItems(items, maxPallets, mirrored, bias) {
+function groupItems(items, maxPallets, mirrored) {
   const pallets = [];
   const unplaced = [];
   const deckArea = PMC.usableWidth*PMC.usableLength;
@@ -278,7 +274,7 @@ function groupItems(items, maxPallets, mirrored, bias) {
     }
     const possible = pallets.filter(pallet => pallet.minArea+item.minArea<=deckArea+EPS);
     const shared = possible.find(pallet => {
-      const box = fitItem(item,pallet,{bias});
+      const box = fitItem(item,pallet);
       if (!box) return false;
       addToPallet(pallet,box);
       return true;
@@ -296,7 +292,7 @@ function groupItems(items, maxPallets, mirrored, bias) {
     if (rearranged) continue;
 
     const stacked = pallets.find(pallet => {
-      const box = fitAboveFloor(item,pallet,mirrored,bias);
+      const box = fitAboveFloor(item,pallet,mirrored);
       if (!box) return false;
       addToPallet(pallet,box);
       return true;
@@ -305,7 +301,7 @@ function groupItems(items, maxPallets, mirrored, bias) {
 
     if (pallets.length<maxPallets) {
       const pallet = emptyPallet();
-      const box = fitItem(item,pallet,{bias});
+      const box = fitItem(item,pallet);
       if (box) {
         addToPallet(pallet,box);
         pallets.push(pallet);
@@ -317,32 +313,10 @@ function groupItems(items, maxPallets, mirrored, bias) {
   return {pallets,unplaced};
 }
 
-function chooseLayout(items, maxPallets, mirrored) {
-  const anchored = items.some(item => item.choices.some(({choice}) =>
-    choice.alignment==='manual' || choice.alignment==='high'));
-  if (anchored) return groupItems(items,maxPallets,mirrored);
-
-  // Keep an unbiased trial as an alternative. Compare complete layouts, so a
-  // locally attractive position cannot win at the expense of a later piece.
-  const preferences = mirrored ? ['high-x','low-x',undefined] : ['low-x','high-x',undefined];
-  let best;
-  let bestScore;
-  for (const bias of preferences) {
-    const layout = groupItems(items,maxPallets,mirrored,bias);
-    const reserved = layout.pallets.reduce((total,pallet) => total+pallet.reserved.size-1,0);
-    const score = [layout.unplaced.length,layout.pallets.length,reserved];
-    if (!best || compareScore(score,bestScore)<0) {
-      best = layout;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
 function describePlacement(box, requested) {
   if (box.alignment==='manual') return 'Elle yan konum; boyuna konum ve dönüş korundu.';
   if (box.alignment==='high') return 'Yüksek kontur tarafına doğru yerleştirildi; boyuna konum ve dönüş korundu.';
-  if (requested==='auto') return 'Otomatik hesap farklı enine düzenleri karşılaştırdı.';
+  if (requested==='auto') return 'İzin verilen yönlerde az şematik pozisyon kullanan yerleşim arandı.';
   return 'Seçilen hizalamaya göre şematik yerleşim yapıldı.';
 }
 
@@ -358,7 +332,7 @@ export function runLongCargo(rows,config={}) {
   if(!['auto',...ALIGNMENTS].includes(config.longCargoAlignment??'auto')){result.errors.push('Yerleşim seçimi geçersiz.');return result;}
 
   const items=rows.flatMap(row=>Array.from({length:row.quantity},(_,i)=>prepareItem(row,i+1,config,result.warnings)));
-  const grouped=chooseLayout(items,max,!!config.mirrored);
+  const grouped=groupItems(items,max,!!config.mirrored);
   const placed=new Map();
   result.pallets=grouped.pallets.map((pallet,index)=>{
     const parts=pallet.boxes.map(({item,...placement})=>{

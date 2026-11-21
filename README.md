@@ -137,8 +137,6 @@ Her fiziksel PMC bağımsız bir senaryodur. S(x,y) alanları eşit PMC adımlı
 
 Şematik kontur, yükün fiziksel paletin üzerinde kalan kısmına uygulanır. Komşu hücreler için gerçek uçak konturları, destek, ağırlık merkezi, bağlama ve operasyon limitleri ayrıca doğrulanmalıdır.
 
-Uzun yük hesabı farklı enine düzenleri karşılaştırır. Önce en çok parçayı yerleştiren düzeni, eşitlikte daha az fiziksel PMC ve daha az boş komşu alan kullanan düzeni seçer. Elle veya yüksek kenara hizalanan parçaların konum tercihleri ayrıca korunur.
-
 Sol ve sağ kısa kenar seçimleri Y=0 ve Y=317,5 cm kenarlarına karşılık gelir. **Ortalı** seçimde boyuna taşma iki yana dağıtılır. Aynı PMC üzerinde parçalar birbirine alan bırakmak için enine kaydırılabilir.
 
 3D palet planında **Ölçüler** kutusu yalnızca sahnedeki ölçü çizgilerini, okları ve cm/inç açıklamalarını açar/kapatır (taşma ölçüleri dahil). Kontur, kargo etiketleri, yerleşim hesabı ve güvenlik notları değişmez. Varsayılan olarak açıktır.
