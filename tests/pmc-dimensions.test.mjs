@@ -13,7 +13,7 @@ await mkdir(resolve('node_modules/.cache'),{recursive:true});
 await build({entryPoints:['src/PmcScene.jsx'],outfile:output,bundle:true,packages:'external',format:'esm',platform:'node',jsx:'automatic',loader:{'.css':'empty'}});
 const {default:Scene}=await import(pathToFileURL(output));
 test('measurement toggle hides long-cargo overhang dimensions without altering geometry or other labels',()=>{
- const r=runLongCargo([{id:'test',name:'Long cargo',width:88,length:400,height:166,quantity:1,weight:25,allowRotation:false}],{longCargoAlignment:'rear'});
+ const r=runLongCargo([{id:'test',name:'Long cargo',width:88,length:400,height:60,quantity:1,weight:25,allowRotation:false}],{longCargoAlignment:'rear'});
  const draw=showDimensions=>new JSDOM(renderToStaticMarkup(React.createElement(Scene,{placements:r.placements,showDimensions}))).window.document;
  const on=draw(true),off=draw(false);
  assert.equal(on.querySelectorAll('[data-dimension*="overhang"]').length,2);

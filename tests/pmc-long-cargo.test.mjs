@@ -10,12 +10,12 @@ test('physical edge clearance does not subtract height',()=>{const b=runLongCarg
 test('invalid data and limits rejected',()=>{for(const bad of [0,-1,NaN,Infinity])assert.ok(runLongCargo([{...row,length:bad}]).errors.length);assert.ok(runLongCargo([row],{maxPallets:0}).errors.length);assert.ok(runLongCargo([row],{longCargoAlignment:'bad'}).errors.length);});
 test('physical PMC limit preserves unplaced accounting',()=>{const r=runLongCargo([{...row,quantity:3}],{maxPallets:1});assert.equal(r.summary.requestedCount,3);assert.equal(r.summary.placedCount,1);assert.equal(r.unplaced.length,2);});
 
-test('wide cargo uses one-sided transverse placement without rotating',()=>{const b=runLongCargo([{...row,length:88,width:400}]).placements[0];assert.equal(b.positionCount,2);assert.equal(b.rotated,false);assert.ok(Math.abs(b.overhang.right-164.66)<1e-6);});
+test('wide cargo uses one-sided transverse placement without rotating',()=>{const b=runLongCargo([{...row,length:88,width:400,height:60}]).placements[0];assert.equal(b.positionCount,2);assert.equal(b.rotated,false);assert.ok(Math.abs(b.overhang.right-164.66)<1e-6);});
 
 import {preparePmcTransfer} from '../src/pmc-aircraft.mjs';
 test('test mode cannot bypass transfer protection even without overhang',()=>{assert.throws(()=>preparePmcTransfer(runLongCargo([{...row,length:100}])),/test senaryosu/);});
 
-test('front/rear align opposite LONG edges with inset and distinct x coordinates',()=>{const front=runLongCargo([row],{longCargoAlignment:'front'}).placements[0],rear=runLongCargo([row],{longCargoAlignment:'rear'}).placements[0];assert.equal(front.x,8.5);assert.equal(rear.x,147.34);assert.equal(rear.x+rear.w,235.34);assert.equal(front.localY,rear.localY);assert.equal(front.overhang.front,41.25);assert.equal(rear.overhang.rear,41.25);assert.notEqual(front.x,rear.x);});
+test('front/rear align opposite LONG edges with inset and distinct x coordinates',()=>{const shortHeight={...row,height:60};const front=runLongCargo([shortHeight],{longCargoAlignment:'front'}).placements[0],rear=runLongCargo([shortHeight],{longCargoAlignment:'rear'}).placements[0];assert.equal(front.x,8.5);assert.equal(rear.x,147.34);assert.equal(rear.x+rear.w,235.34);assert.equal(front.localY,rear.localY);assert.equal(front.overhang.front,41.25);assert.equal(rear.overhang.rear,41.25);assert.notEqual(front.x,rear.x);});
 test('short edge options retain8.5cm inset and longitudinal overhang',()=>{const l=runLongCargo([row],{longCargoAlignment:'left'}).placements[0],r=runLongCargo([row],{longCargoAlignment:'right'}).placements[0];assert.equal(l.localY,8.5);assert.equal(r.localY+r.l,309);assert.equal(l.overhang.rear,91);assert.equal(r.overhang.front,91);});
 test('high edge preserves longitudinal overhang and rotation in both contour directions',()=>{
  const before=runLongCargo([row],{longCargoAlignment:'right'}).placements[0];
@@ -28,4 +28,44 @@ test('high edge preserves longitudinal overhang and rotation in both contour dir
 test('changed dimensions invalidate high-edge snapshot instead of retaining stale shape',()=>{
  const result=runLongCargo([{...row,width:90}],{highEdgeAnchors:{'long:1':{y:-91,w:88,l:400,h:166,rotated:false}}});
  assert.equal(result.placements[0].w,90);assert.notEqual(result.placements[0].alignment,'high');assert.ok(result.warnings.some(w=>w.includes('yeniden uygulanmalı')));
+});
+
+test('three 400 cm pieces share one PMC and reserve the same neighboring cell only once',()=>{
+ const result=runLongCargo([{...row,width:70,height:60,quantity:3,weight:null}],{maxPallets:1});
+ assert.equal(result.summary.placedCount,3);
+ assert.equal(result.summary.physicalPmcCount,1);
+ assert.equal(result.summary.positionCount,2);
+ assert.equal(result.summary.unknownWeightCount,3);
+ assert.equal(result.pallets[0].blockedPositions.length,1);
+ const pieces=[...result.placements].sort((a,b)=>a.x-b.x);
+ assert.ok(pieces.every(piece=>piece.palletIndex===0 && piece.z===0 && piece.overhang.rear===91 && !piece.flightApproved));
+ assert.ok(pieces.slice(1).every((piece,i)=>piece.x>=pieces[i].x+pieces[i].w-1e-6));
+});
+
+test('selected centered alignment preserves both longitudinal overhangs while sharing a PMC',()=>{
+ const result=runLongCargo([{...row,width:80,height:60,quantity:2}],{maxPallets:1,longCargoAlignment:'center'});
+ assert.equal(result.summary.placedCount,2);
+ assert.equal(result.summary.positionCount,3);
+ assert.ok(result.placements.every(piece=>piece.overhang.front===41.25 && piece.overhang.rear===41.25));
+});
+
+test('one shared group keeps both transverse and longitudinal overhang reservations',()=>{
+ const result=runLongCargo([
+  {...row,id:'wide',width:400,length:80,height:60},
+  {...row,id:'small',width:80,length:90,height:60},
+ ],{maxPallets:1});
+ assert.equal(result.summary.placedCount,2);
+ assert.equal(result.summary.positionCount,2);
+ assert.ok(result.placements[0].overhang.right>0);
+ assert.equal(result.placements[1].overhangCm,0);
+});
+
+test('the contour blocks wide high cargo and the low-side legacy alignment',()=>{
+ for(const mirrored of [false,true]){
+  const r=runLongCargo([{...row,length:88,width:400}],{mirrored});
+  assert.equal(r.summary.placedCount,0);
+  assert.match(r.unplaced[0].reason,/kontur/);
+ }
+ const legacy=runLongCargo([row],{longCargoAlignment:'rear'});
+ assert.equal(legacy.summary.placedCount,0);
 });

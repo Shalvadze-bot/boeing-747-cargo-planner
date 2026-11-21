@@ -144,10 +144,24 @@ test('high edge dropdown preserves longitudinal placement and clears on alternat
  const select=field('Yerleşim seçimi');assert.ok(select.querySelector('option[value="high"]'));
  await change(select,'high');
  assert.equal(select.value,'high');
- assert.match(document.querySelector('.pmc-long-details').textContent,/Yüksek kenara hizalı/);
+ assert.match(document.querySelector('.pmc-long-details').textContent,/Yüksek kontur tarafına hizalı/);
  assert.match(document.querySelector('.pmc-long-details').textContent,/sol kısa kenar 91 cm/);
  const saved=JSON.parse(localStorage.getItem('cargo-pmc-v1'));assert.equal(saved.config.highEdgeAnchors['long:1'].y,-91);
  await change(select,'center');assert.equal(select.value,'center');assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.highEdgeAnchors,null);
+});
+
+test('the long cargo screen renders shared pieces and a single shared overhang reservation',async()=>{
+ const rows=[{id:'long',name:'Uzun yük',length:400,width:70,height:60,quantity:3,weight:25,allowRotation:false,stackable:false}];
+ localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows,config:{maxPallets:1,longCargo:true}}));
+ await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'shared-long-pmc'}));await pause();});
+ await act(pause);
+ assert.equal(document.querySelectorAll('.pmc-pallet-select button:not(:disabled)').length,1);
+ assert.equal(document.querySelectorAll('.pmc-scene-item-label').length,3);
+ const detail=document.querySelector('.pmc-long-details');
+ assert.match(detail.textContent,/1 fiziksel PMC · 3 parça · 2 şematik pozisyon/);
+ assert.equal(detail.querySelectorAll('.pmc-slot-map .support').length,1);
+ assert.equal(detail.querySelectorAll('.pmc-slot-map .blocked').length,1);
+ assert.equal(button('Uçak paletlerine ekle'),undefined);
 });
 
 test('saved long-edge placement stays intact until a new alignment is selected',async()=>{

@@ -1,38 +1,287 @@
-import {PMC,orientations,ORIENTATION_MODES} from './pmc-engine.mjs';
-const EPS=1e-6;
+import { PMC, orientations, ORIENTATION_MODES } from './pmc-engine.mjs';
+
+const EPS = 1e-6;
+const ALIGNMENTS = ['center', 'front', 'rear', 'left', 'right'];
 export const TECHNICAL_CHECKS = ['Kapı açıklığı ve kapıdan geçiş','Uçak içinde dönüş ve yerleştirme yolu','Gerçek pozisyon aralıkları ve konturları','Yükün desteği ve sehim/dayanım','Ağırlık merkezi ve devrilme','PMC, pozisyon ve zemin yük limitleri','Bağlama ve operatör onayı'];
-/** Allowed transverse origin for a rectangular box under the UNVERIFIED schematic profile.
- * z+h is used, never a height-cut display setting. No aircraft/structural approval. */
-export function lateralBounds(box,mirrored=false) {
-  const {w,h,z=0}=box??{};
-  const bad=reason=>({valid:false,min:null,max:null,reason});
-  if(![w,h,z].every(Number.isFinite)||w<=0||h<=0||z<0)return bad('Geçerli genişlik, yükseklik ve taban yüksekliği gerekli.');
-  const top=z+h;
-  if(top>PMC.maxHeight+EPS)return bad('Yükün üstü şematik kontur yüksekliğini aşıyor.');
-  const limit=top<=PMC.lowHeight?PMC.width:PMC.shoulderX+(PMC.maxHeight-top)*(PMC.width-PMC.shoulderX)/(PMC.maxHeight-PMC.lowHeight);
-  const min=Math.max(PMC.margin,mirrored?PMC.width-limit:0);
-  const max=Math.min(PMC.width-PMC.margin-w,mirrored?PMC.width-w:limit-w);
-  if(max<min-EPS)return bad('8,5 cm taban payı ve yük yüksekliğinde kontur içinde yan hareket alanı yok.');
-  return {valid:true,min,max:Math.max(min,max),reason:null};
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const overlap = (start, size, otherStart, otherSize) =>
+  start < otherStart + otherSize - EPS && otherStart < start + size - EPS;
+
+function profileLimit(height) {
+  if (height <= PMC.lowHeight) return PMC.width;
+  return PMC.shoulderX + (PMC.maxHeight - height) * (PMC.width - PMC.shoulderX) / (PMC.maxHeight - PMC.lowHeight);
 }
-/** Schematic equal-pitch positions only, NOT aircraft loading approval. */
+
+/** Bounds for dragging within the base and contour on a single PMC. */
+export function lateralBounds(box, mirrored = false, neighbors = []) {
+  const { w, h, z = 0 } = box ?? {};
+  const bad = reason => ({ valid:false, min:null, max:null, reason });
+  if (![w,h,z].every(Number.isFinite) || w <= 0 || h <= 0 || z < 0)
+    return bad('Geçerli genişlik, yükseklik ve taban yüksekliği gerekli.');
+  if (z + h > PMC.maxHeight + EPS)
+    return bad('Yükün üstü şematik kontur yüksekliğini aşıyor.');
+  const limit = profileLimit(z + h);
+  let min = Math.max(PMC.margin, mirrored ? PMC.width - limit : 0);
+  let max = Math.min(PMC.width - PMC.margin - w, mirrored ? PMC.width - w : limit - w);
+  if (max < min - EPS)
+    return bad('8,5 cm taban payı ve yük yüksekliğinde kontur içinde yan hareket alanı yok.');
+
+  for (const other of neighbors) {
+    if (!overlap(box.y, box.l, other.y, other.l)) continue;
+    if (other.x + other.w <= box.x + EPS) min = Math.max(min, other.x + other.w);
+    else if (box.x + w <= other.x + EPS) max = Math.min(max, other.x - w);
+    else return bad('Bu yük, aynı PMC’deki başka bir parçayla çakışıyor.');
+  }
+  if (max < min - EPS) return bad('Aynı PMC’deki parçalar arasında hareket alanı yok.');
+  return { valid:true, min, max:Math.max(min,max), reason:null };
+}
+
+// A smaller dimension stays inside the net deck. An oversized one can extend
+// beyond the deck, while continuing to span the net deck in that direction.
+function axisRange(size, deckSize) {
+  const far = deckSize - PMC.margin - size;
+  return { min:Math.min(PMC.margin, far), max:Math.max(PMC.margin, far) };
+}
+
+function placementBounds({w,l,h}, mirrored) {
+  if (h > PMC.maxHeight + EPS) return null;
+  const x = axisRange(w, PMC.width);
+  const y = axisRange(l, PMC.length);
+  if (h > PMC.lowHeight) {
+    // Check the contour over the physical plate. Adjacent cells are only
+    // reservations, so there is no aircraft profile to apply outside it.
+    const limit = profileLimit(h);
+    if (mirrored) x.min = Math.max(x.min, PMC.width - limit);
+    else x.max = Math.min(x.max, limit - w);
+  }
+  if (x.max < x.min - EPS) return null;
+  x.max = Math.max(x.min, x.max);
+  return {x,y};
+}
+
+function gridBounds({x,y,w,l}) {
+  return {
+    x0:Math.floor((x + EPS) / PMC.width), x1:Math.ceil((x + w - EPS) / PMC.width) - 1,
+    y0:Math.floor((y + EPS) / PMC.length), y1:Math.ceil((y + l - EPS) / PMC.length) - 1,
+  };
+}
+
+function positionsFor(box) {
+  const {x0,x1,y0,y1}=gridBounds(box);
+  const positions = [];
+  for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++)
+    positions.push({x,y,id:`S(${x},${y})`,support:x===0 && y===0});
+  return positions;
+}
+
+function placementGeometry(box) {
+  const {x,y,w,l}=box;
+  const positions=positionsFor(box);
+  return {
+    ...box, z:0, positions, physicalPmcCount:1, positionCount:positions.length,
+    blockedPositions:positions.filter(p=>!p.support),
+    overhang:{left:Math.max(0,-x),right:Math.max(0,x+w-PMC.width),front:Math.max(0,-y),rear:Math.max(0,y+l-PMC.length)},
+    usableBoundaryExcess:{left:Math.max(0,PMC.margin-x),right:Math.max(0,x+w-(PMC.width-PMC.margin)),front:Math.max(0,PMC.margin-y),rear:Math.max(0,y+l-(PMC.length-PMC.margin))},
+    status:'TECHNICAL_VALIDATION_PENDING', flightApproved:false,
+  };
+}
+
+function baseCandidates(row) {
+  return orientations(row).flatMap(([w,l,h,orientationFace]) => ALIGNMENTS.map(alignment => ({
+    w,l,h,orientationFace,alignment,rotated:w!==row.width,
+    x:alignment==='front' ? PMC.margin : alignment==='rear' ? PMC.width-PMC.margin-w : (PMC.width-w)/2,
+    y:alignment==='left' ? PMC.margin : alignment==='right' ? PMC.length-PMC.margin-l : (PMC.length-l)/2,
+  })));
+}
+
+/** Individual candidate outlines on a schematic grid. */
 export function longCargoCandidates(row) {
-  const variants=orientations(row);
-  return variants.flatMap(([w,l,h,face])=>['center','front','rear','left','right'].map(alignment=>{
-    const x=alignment==='front'?PMC.margin:alignment==='rear'?PMC.width-PMC.margin-w:(PMC.width-w)/2;
-    const y=alignment==='left'?PMC.margin:alignment==='right'?PMC.length-PMC.margin-l:(PMC.length-l)/2;
-    return {...placementGeometry(x,y,w,l,h,w!==row.width,alignment),orientationFace:face};
-  }));
+  return baseCandidates(row).map(placementGeometry);
 }
-function placementGeometry(x,y,w,l,h,rotated,alignment) {
-    const x0=Math.floor((x+EPS)/PMC.width),x1=Math.ceil((x+w-EPS)/PMC.width)-1;
-    const y0=Math.floor((y+EPS)/PMC.length),y1=Math.ceil((y+l-EPS)/PMC.length)-1;
-    const positions=[];
-    for(let iy=y0;iy<=y1;iy++)for(let ix=x0;ix<=x1;ix++)positions.push({x:ix,y:iy,id:`S(${ix},${iy})`,support:ix===0&&iy===0});
-    const overhang={left:Math.max(0,-x),right:Math.max(0,x+w-PMC.width),front:Math.max(0,-y),rear:Math.max(0,y+l-PMC.length)};
-    const usableBoundaryExcess={left:Math.max(0,PMC.margin-x),right:Math.max(0,x+w-(PMC.width-PMC.margin)),front:Math.max(0,PMC.margin-y),rear:Math.max(0,y+l-(PMC.length-PMC.margin))};
-    return {usableBoundaryExcess,x,y,w,l,h,z:0,rotated,alignment,positions,overhang,physicalPmcCount:1,positionCount:positions.length,blockedPositions:positions.filter(p=>!p.support),status:'TECHNICAL_VALIDATION_PENDING',flightApproved:false};
+
+function within(value, range) {
+  return value >= range.min - EPS && value <= range.max + EPS;
 }
+
+function prepareItem(row, number, config, warnings) {
+  const id = `${row.id}:${number}`;
+  const mirrored = !!config.mirrored;
+  const requested = config.longCargoAlignment ?? 'auto';
+  const candidates = baseCandidates({...row, orientationMode:row.pieceOrientations?.[number] ?? row.orientationMode ?? 'upright'});
+  const match = anchor => candidates.find(candidate =>
+    candidate.w===anchor.w && candidate.l===anchor.l && candidate.h===anchor.h && candidate.rotated===anchor.rotated);
+  const validY = anchor => Number.isFinite(anchor.y) && within(anchor.y, axisRange(anchor.l, PMC.length));
+  const manual = config.manualXAnchors?.[id];
+  const high = config.highEdgeAnchors?.[id];
+  let choices;
+
+  if (manual) {
+    const shape = validY(manual) && Number.isFinite(manual.x) && match(manual);
+    const bounds = shape && lateralBounds(manual, mirrored);
+    if (bounds?.valid) {
+      const x = clamp(manual.x, bounds.min, bounds.max);
+      choices = [{ ...shape, x, y:manual.y, alignment:'manual', fixedX:true, fixedY:true }];
+      if (Math.abs(x-manual.x)>EPS) warnings.push(id+': yan konum şematik kontur ve 8,5 cm taban sınırına kısıtlandı.');
+    } else {
+      warnings.push(id+': elle yan konum uygulanmadı; '+(bounds?.reason || 'ölçüler/yön değişti veya konum geçersiz; yeniden yerleştirin.'));
+    }
+  }
+  if (!choices && high) {
+    const shape = validY(high) && match(high);
+    const bounds = shape && placementBounds(shape, mirrored);
+    if (bounds) {
+      choices = [{ ...shape, x:mirrored ? bounds.x.max : bounds.x.min, y:high.y, alignment:'high', fixedY:true }];
+    } else {
+      warnings.push(id+': ölçüler/yön değişti veya kontura sığmadı; yüksek kenar hizalaması yeniden uygulanmalı.');
+    }
+  }
+
+  if (!choices) {
+    choices = candidates.filter(candidate => requested==='auto' || candidate.alignment===requested).map(candidate => ({
+      ...candidate,
+      fixedX:candidate.alignment==='front' || candidate.alignment==='rear',
+      fixedY:candidate.alignment==='left' || candidate.alignment==='right' || requested==='center' || candidate.l>PMC.usableLength,
+    }));
+  }
+  choices = choices.flatMap(choice => {
+    const bounds = placementBounds(choice, mirrored);
+    if (!bounds || (choice.fixedX && !within(choice.x,bounds.x)) || (choice.fixedY && !within(choice.y,bounds.y))) return [];
+    return [{choice, bounds}];
+  });
+  const minArea = Math.min(...choices.map(({choice}) => Math.min(choice.w,PMC.usableWidth)*Math.min(choice.l,PMC.usableLength)));
+  return {id,row,candidates,choices,minArea,requested};
+}
+
+function originOptions(range, preferred, fixed, neighbors, axis, sizeKey, size) {
+  if (fixed) return [preferred];
+  const options = new Set([clamp(preferred,range.min,range.max), range.min,range.max]);
+  for (const box of neighbors) {
+    for (const coordinate of [box[axis]+box[sizeKey], box[axis]-size]) {
+      if (within(coordinate,range)) options.add(clamp(coordinate,range.min,range.max));
+    }
+  }
+  return [...options].sort((a,b) => Math.abs(a-preferred)-Math.abs(b-preferred));
+}
+
+function findOrigin(choice, bounds, neighbors, bias) {
+  const preferredX = choice.fixedX ? choice.x : bias==='high-x' ? bounds.x.max : bias==='low-x' ? bounds.x.min : choice.x;
+  const preferredY = !choice.fixedY && bias && neighbors.length ? bounds.y.min : choice.y;
+  const xs = originOptions(bounds.x,preferredX,choice.fixedX,neighbors,'x','w',choice.w);
+  const ys = originOptions(bounds.y,preferredY,choice.fixedY,neighbors,'y','l',choice.l);
+  for (const y of ys) {
+    const row = neighbors.filter(box => overlap(y,choice.l,box.y,box.l));
+    for (const x of xs) {
+      if (row.some(box => overlap(x,choice.w,box.x,box.w))) continue;
+      const {fixedX,fixedY,...box}=choice;
+      const shifted = Math.abs(x-choice.x)>EPS || Math.abs(y-choice.y)>EPS;
+      return {...box, x,y, alignment:shifted && choice.alignment==='center' ? 'group' : choice.alignment};
+    }
+  }
+  return null;
+}
+
+function compareScore(a,b) {
+  for (let i=0; i<a.length; i++) if (a[i]!==b[i]) return a[i]-b[i];
+  return 0;
+}
+
+function fitItem(item, pallet, bias) {
+  let best = null;
+  let bestScore;
+  for (const {choice,bounds} of item.choices) {
+    const box = findOrigin(choice,bounds,pallet.boxes,bias);
+    if (!box) continue;
+    const positions = positionsFor(box);
+    const added = positions.reduce((n,position) => n + Number(!pallet.reserved.has(position.id)),0);
+    const score = [
+      added,positions.length,Number(choice.rotated),
+      bias==='high-x' ? -box.x : bias==='low-x' ? box.x : 0,
+      ALIGNMENTS.indexOf(choice.alignment),
+    ];
+    if (!best || compareScore(score,bestScore)<0) {
+      best={item,...box};
+      bestScore=score;
+    }
+  }
+  return best;
+}
+
+function addToPallet(pallet, box) {
+  pallet.boxes.push(box);
+  pallet.minArea += box.item.minArea;
+  for (const position of positionsFor(box)) pallet.reserved.set(position.id,position);
+}
+
+const emptyPallet = () => ({boxes:[], minArea:0, reserved:new Map()});
+const bySize = (a,b) =>
+  Number(b.choices[0]?.choice.fixedX && b.choices[0]?.choice.fixedY) - Number(a.choices[0]?.choice.fixedX && a.choices[0]?.choice.fixedY) ||
+  b.row.height - a.row.height || b.minArea - a.minArea;
+
+function rearrangePallet(pallet, item, mirrored) {
+  const items = [...pallet.boxes.map(box => box.item), item].sort(bySize);
+  const biases = mirrored ? ['high-x','low-x'] : ['low-x','high-x'];
+  for (const bias of biases) {
+    const rearranged = emptyPallet();
+    for (const queued of items) {
+      const box = fitItem(queued, rearranged, bias);
+      if (!box) break;
+      addToPallet(rearranged, box);
+    }
+    if (rearranged.boxes.length===items.length) return rearranged;
+  }
+  return null;
+}
+
+function groupItems(items, maxPallets, mirrored) {
+  const pallets = [];
+  const unplaced = [];
+  const deckArea = PMC.usableWidth*PMC.usableLength;
+  for (const item of items) {
+    if (!item.choices.length) {
+      unplaced.push({id:item.id,name:item.row.name,reason:'İzin verilen yön ve hizalamada parça PMC konturuna veya taban sınırına sığmadı.'});
+      continue;
+    }
+    const possible = pallets.filter(pallet => pallet.minArea+item.minArea<=deckArea+EPS);
+    const shared = possible.find(pallet => {
+      const box = fitItem(item,pallet);
+      if (!box) return false;
+      addToPallet(pallet,box);
+      return true;
+    });
+    if (shared) continue;
+
+    let rearranged = false;
+    for (const pallet of possible) {
+      const combined = rearrangePallet(pallet,item,mirrored);
+      if (!combined) continue;
+      pallets[pallets.indexOf(pallet)]=combined;
+      rearranged = true;
+      break;
+    }
+    if (rearranged) continue;
+
+    if (pallets.length<maxPallets) {
+      const pallet = emptyPallet();
+      const box = fitItem(item,pallet);
+      if (box) {
+        addToPallet(pallet,box);
+        pallets.push(pallet);
+        continue;
+      }
+    }
+    unplaced.push({id:item.id,name:item.row.name,reason:'Parçalar çakışmadan veya konturu aşmadan mevcut PMC’lere yerleşemedi; fiziksel PMC sınırına ulaşıldı.'});
+  }
+  return {pallets,unplaced};
+}
+
+function describePlacement(box, requested) {
+  if (box.alignment==='manual') return 'Elle yan konum; boyuna konum ve dönüş korundu.';
+  if (box.alignment==='high') return 'Yüksek kontur tarafına doğru yerleştirildi; boyuna konum ve dönüş korundu.';
+  if (requested==='auto') return 'İzin verilen yönlerde az şematik pozisyon kullanan yerleşim arandı.';
+  return 'Seçilen hizalamaya göre şematik yerleşim yapıldı.';
+}
+
 export function runLongCargo(rows,config={}) {
   const result={config:{...config,longCargo:true},positionModel:'INDEPENDENT_SCENARIOS_EQUAL_PITCH_NOT_AIRCRAFT_ALLOCATION',errors:[],warnings:['YALNIZCA TEST / GEOMETRİK ÖNİZLEME — uçuş veya yükleme onayı değildir.',...TECHNICAL_CHECKS.map(s=>s+': teknik bilgi / doğrulama bekliyor.')],placements:[],pallets:[],unplaced:[],summary:{requestedCount:0,placedCount:0,palletCount:0,physicalPmcCount:0,positionCount:0,knownWeightKg:0,unknownWeightCount:0}};
   if(!Array.isArray(rows)||rows.length>100){result.errors.push('En fazla 100 yük satırı.');return result;}
@@ -42,34 +291,38 @@ export function runLongCargo(rows,config={}) {
   if(new Set(rows.map(r=>r.id)).size!==rows.length){result.errors.push('Yük kimlikleri benzersiz olmalı.');return result;}
   const max=Number(config.maxPallets??6);
   if(!Number.isInteger(max)||max<1||max>30){result.errors.push('Fiziksel PMC sınırı 1–30 olmalı.');return result;}
-  const alignment=config.longCargoAlignment??'auto';
-  if(!['auto','center','front','rear','left','right'].includes(alignment)){result.errors.push('Yerleşim seçimi geçersiz.');return result;}
-  for(const r of rows)for(let i=0;i<r.quantity;i++){
-    const id=`${r.id}:${i+1}`;result.summary.requestedCount++;
-    if(result.placements.length>=max){result.unplaced.push({id,name:r.name,reason:'Her parça için ayrı tek destek PMC test senaryosu: fiziksel PMC sınırına ulaşıldı.'});continue;}
-    const candidates=longCargoCandidates({...r,orientationMode:r.pieceOrientations?.[i+1]??r.orientationMode??'upright'});
-    const pool=candidates.filter(c=>alignment==='auto'||c.alignment===alignment);
-    pool.sort((a,b)=>a.positionCount-b.positionCount||Number(a.rotated)-Number(b.rotated)||(['center','front','rear','left','right'].indexOf(a.alignment)-['center','front','rear','left','right'].indexOf(b.alignment)));
-    let c=pool[0];
-    const anchor=config.highEdgeAnchors?.[id];
-    if(anchor && Number.isFinite(anchor.y) && Math.abs(anchor.y)<=10000 && anchor.y<PMC.length && anchor.y+anchor.l>0 && candidates.some(v=>v.w===anchor.w && v.l===anchor.l && v.h===anchor.h && v.rotated===anchor.rotated)){
-      c=placementGeometry(config.mirrored?PMC.width-PMC.margin-anchor.w:PMC.margin,anchor.y,anchor.w,anchor.l,anchor.h,anchor.rotated,'high');
-    } else if(anchor) result.warnings.push(id+': ölçüler/yön değişti; yüksek kenar hizalaması yeniden uygulanmalı.');
-    const manual=config.manualXAnchors?.[id];
-    if(manual) {
-      const snapshotValid=Number.isFinite(manual.x)&&Number.isFinite(manual.y)&&Math.abs(manual.y)<=10000&&manual.y<PMC.length&&manual.y+manual.l>0&&candidates.some(v=>v.w===manual.w&&v.l===manual.l&&v.h===manual.h&&v.rotated===manual.rotated);
-      const bounds=snapshotValid?lateralBounds(manual,!!config.mirrored):null;
-      if(bounds?.valid) {
-        const x=Math.max(bounds.min,Math.min(bounds.max,manual.x));
-        c=placementGeometry(x,manual.y,manual.w,manual.l,manual.h,manual.rotated,'manual');
-        if(Math.abs(x-manual.x)>EPS)result.warnings.push(id+': yan konum şematik kontur ve 8,5 cm taban sınırına kısıtlandı.');
-      } else result.warnings.push(id+': elle yan konum uygulanmadı; '+(bounds?.reason||'ölçüler/yön değişti veya konum geçersiz; yeniden yerleştirin.'));
-    }
-    const p=result.placements.length;
-    const box={...c,id,rowId:r.id,name:r.name,color:r.color,weight:r.weight??null,stackable:false,palletIndex:p,touchedPallets:[p],localY:c.y,y:c.y+p*PMC.length,overhangCm:Math.max(...Object.values(c.overhang)),reviewRequired:true,supportId:null,supportIds:[],candidates,rationale:`${c.positionCount} şematik pozisyon; ${c.alignment==='manual'?'elle yan konum; boyuna konum ve dönüş korundu, yalnızca şematik kontur kontrolü':c.alignment==='high'?'yüksek kontur kenarına hizalı; mevcut boyuna konum ve dönüş korundu':alignment==='auto'?'izin verilen dönüşlerde en az pozisyon, eşitlikte döndürmeden ve ortalı yerleşim':'kullanıcının seçtiği yerleşim'}. Ağırlık merkezi optimizasyonu yapılmadı.`};
-    result.placements.push(box);result.pallets.push({index:p,items:[box]});
-    result.summary.positionCount+=c.positionCount;result.summary.knownWeightKg+=r.weight??0;result.summary.unknownWeightCount+=r.weight==null?1:0;
-  }
-  Object.assign(result.summary,{placedCount:result.placements.length,palletCount:result.pallets.length,physicalPmcCount:result.pallets.length,unplacedCount:result.unplaced.length});
+  if(!['auto',...ALIGNMENTS].includes(config.longCargoAlignment??'auto')){result.errors.push('Yerleşim seçimi geçersiz.');return result;}
+
+  const items=rows.flatMap(row=>Array.from({length:row.quantity},(_,i)=>prepareItem(row,i+1,config,result.warnings)));
+  const grouped=groupItems(items,max,!!config.mirrored);
+  const placed=new Map();
+  result.pallets=grouped.pallets.map((pallet,index)=>{
+    const parts=pallet.boxes.map(({item,...placement})=>{
+      const box=placementGeometry(placement);
+      const part={...box,id:item.id,rowId:item.row.id,name:item.row.name,color:item.row.color,
+        weight:item.row.weight??null,stackable:false,palletIndex:index,touchedPallets:[index],
+        localY:box.y,y:box.y+index*PMC.length,overhangCm:Math.max(...Object.values(box.overhang)),
+        reviewRequired:true,supportId:null,supportIds:[],
+        candidates:item.candidates.filter(candidate => {
+          const bounds=placementBounds(candidate,!!config.mirrored);
+          return bounds && within(candidate.x,bounds.x) && within(candidate.y,bounds.y);
+        }).map(placementGeometry),
+        rationale:describePlacement(box,item.requested),
+      };
+      placed.set(part.id,part);
+      return part;
+    });
+    const positions=[...pallet.reserved.values()].sort((a,b)=>a.y-b.y || a.x-b.x);
+    return {index,items:parts,positions,positionCount:positions.length,blockedPositions:positions.filter(p=>!p.support)};
+  });
+  result.placements=items.flatMap(item=>placed.has(item.id)?[placed.get(item.id)]:[]);
+  result.unplaced=grouped.unplaced;
+  result.summary={
+    requestedCount:count,placedCount:result.placements.length,palletCount:result.pallets.length,physicalPmcCount:result.pallets.length,
+    positionCount:result.pallets.reduce((n,pallet)=>n+pallet.positionCount,0),
+    knownWeightKg:result.placements.reduce((n,part)=>n+(part.weight??0),0),
+    unknownWeightCount:result.placements.filter(part=>part.weight===null).length,
+    unplacedCount:result.unplaced.length,
+  };
   return result;
 }

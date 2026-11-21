@@ -23,11 +23,22 @@ test('manual X clamps to contour and cannot override safety with coordinates',()
  const result=runLongCargo([row],{manualXAnchors:{'long:1':{...anchor,x:1000}}});
  close(result.placements[0].x,92.2929090909);assert.ok(result.warnings.some(s=>s.includes('kısıtlandı')));
 });
-test('changed dimension or impossible anchor retains ordinary candidate with warning',()=>{
- for(const change of [{width:90},{height:300}]){
-  const result=runLongCargo([{...row,...change}],{manualXAnchors:{'long:1':anchor}});
-  assert.notEqual(result.placements[0].alignment,'manual');assert.ok(result.warnings.some(s=>s.includes('uygulanmadı')));
- }
+test('changed dimensions invalidate saved anchors and overheight cargo remains unplaced',()=>{
+ const changed=runLongCargo([{...row,width:90}],{manualXAnchors:{'long:1':anchor}});
+ assert.notEqual(changed.placements[0].alignment,'manual');
+ assert.ok(changed.warnings.some(s=>s.includes('uygulanmadı')));
  const result=runLongCargo([{...row,height:300}],{manualXAnchors:{'long:1':{...anchor,h:300}}});
- assert.notEqual(result.placements[0].alignment,'manual');assert.ok(result.warnings.some(s=>s.includes('kontur yüksekliğini')));
+ assert.equal(result.placements.length,0);
+ assert.match(result.unplaced[0].reason,/kontur/);
+ assert.ok(result.warnings.some(s=>s.includes('kontur yüksekliğini')));
+});
+
+test('drag range stops at both neighbors that overlap in Y',()=>{
+ const box={x:80,y:10,l:400,w:60,h:60};
+ const left={x:8.5,y:-20,l:100,w:55};
+ const right={x:170,y:50,l:300,w:40};
+ const separate={x:85,y:500,l:50,w:30};
+ const bounds=lateralBounds(box,false,[left,right,separate]);
+ assert.equal(bounds.min,63.5);
+ assert.equal(bounds.max,110);
 });

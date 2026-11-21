@@ -40,7 +40,9 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
   const selected = placements.find(p => p.id === selectedItemId);
   useEffect(()=>{setXDraft(selected?String(Number(selected.x.toFixed(2))):'');},[selected?.id,selected?.x]);
   function commitX(){if(xDraft.trim()!=='' && Number.isFinite(Number(xDraft)) && limits?.valid){const x=Math.max(limits.min,Math.min(limits.max,Number(xDraft)));moveTo(x);setXDraft(String(Number(x.toFixed(2))));}else setXDraft(selected?String(Number(selected.x.toFixed(2))):'');}
-  const limits=selected?lateralBounds(selected,mirrorContour):null;
+  const limitsFor = item => lateralBounds(item, mirrorContour,
+    placements.filter(other => other.palletIndex === item.palletIndex && other.id !== item.id));
+  const limits = selected ? limitsFor(selected) : null;
   const validPosition=limits?.valid && selected.x>=limits.min-1e-6 && selected.x<=limits.max+1e-6;
   const units=n=>`${fmt(n)} cm / ${fmt(n/2.54)} in`;
   function moveTo(x){if(!selected || !limits?.valid || !Number.isFinite(x))return;if(moveOrigins.current[selected.id]==null)moveOrigins.current[selected.id]=selected.x;onMoveCargo?.(selected,Math.max(limits.min,Math.min(limits.max,x)));}
@@ -96,7 +98,7 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
       <label><input type="checkbox" checked={moveMode} onChange={e=>{setMoveMode(e.target.checked);moveOrigins.current={};}}/> Yükü taşı · kamera sabit</label>
       {moveMode && (!selected?<p>Taşımak için yükü seçin. Yalnızca yüksek/alçak kenar yönünde hareket eder.</p>:<>
         <p>{selected.name} · Boyuna konum, taşma ve dönüş korunur.</p>
-        {!limits?.valid?<p role="alert">Bu yük için kontur ve 8,5 cm taban sınırları içinde yatay yerleşim yok. {limits?.reason}</p>:<>
+        {!limits?.valid?<p role="alert">{limits?.reason || 'Bu yük için yatay hareket alanı yok.'}</p>:<>
           {!validPosition && <p role="alert">Mevcut konum şematik kontur/taban sınırı dışında. Kontrolü kullanarak geçerli aralığa taşıyın.</p>}
           <label>Yatay X (cm)<input aria-label="Yatay X (cm)" type="number" step="0.1" min={limits.min} max={limits.max} value={xDraft} onChange={e=>setXDraft(e.target.value)} onBlur={commitX} onKeyDown={e=>{if(e.key==='Enter'){commitX();e.currentTarget.blur();}if(e.key==='Escape')setXDraft(String(Number(selected.x.toFixed(2))));}}/></label>
           <input aria-label="Yükü yatay taşı" type="range" step="0.01" min={limits.min} max={limits.max} value={Math.max(limits.min,Math.min(limits.max,selected.x))} onChange={e=>moveTo(Number(e.target.value))}/>
@@ -113,7 +115,7 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
       <svg className={dragging?'pmc-scene-canvas dragging':'pmc-scene-canvas'} viewBox="0 0 900 510" role="group" aria-labelledby={`${id}-title ${id}-desc`}
         onPointerDown={e=>{if(e.button!==0)return;moved.current=false;
           const itemId=e.target.closest?.('[data-item-id]')?.getAttribute('data-item-id');
-          if(moveMode && onMoveCargo){const item=placements.find(p=>p.id===itemId);if(!item)return;onSelectItem?.(item.id);const bounds=lateralBounds(item,mirrorContour);if(!bounds.valid)return;
+          if(moveMode && onMoveCargo){const item=placements.find(p=>p.id===itemId);if(!item)return;onSelectItem?.(item.id);const bounds=limitsFor(item);if(!bounds.valid)return;
             const a=project([0,0,0]),b=project([1,0,0]);const rect=e.currentTarget.getBoundingClientRect();const scale=Math.min(rect.width/900,rect.height/510);const vx=(b[0]-a[0])*scale,vy=(b[1]-a[1])*scale;if(vx*vx+vy*vy<.01)return;
             moveOrigins.current[item.id]=item.x;drag.current={x:e.clientX,y:e.clientY,item,bounds,vx,vy};
           }else drag.current={x:e.clientX,y:e.clientY,camera,itemId};
