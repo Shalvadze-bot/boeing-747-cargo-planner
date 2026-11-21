@@ -19,3 +19,7 @@
 
 .pmc-profile-diagram figcaption{padding:0 8px 8px;text-align:center;font-size:14px;font-weight:700;color:#e7edf4}
 .pmc-profile-sides{display:flex;justify-content:space-between;gap:8px;padding:0 12px;font-size:12px;font-weight:600;color:#c1cddd}
+
+.pmc-position-help{padding:10px 11px;border-left:2px solid #e9b543;border-radius:4px;background:#182435;color:#e7edf4}
+.pmc-position-help strong{font-size:13px}
+.pmc-position-help p{margin:6px 0 0;font-size:12px;line-height:1.5;color:#c1cddd}
