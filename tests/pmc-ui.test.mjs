@@ -147,6 +147,23 @@ test('high edge dropdown preserves longitudinal placement and clears on alternat
  await change(select,'center');assert.equal(select.value,'center');assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.highEdgeAnchors,null);
 });
 
+test('saved long-edge placement stays intact until a new alignment is selected',async()=>{
+ const rows=[{id:'long',name:'Long',length:400,width:88,height:60,quantity:1,weight:25,allowRotation:false,stackable:false}];
+ for (const alignment of ['front','rear']) {
+  localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows,config:{maxPallets:6,longCargo:true,longCargoAlignment:alignment}}));
+  await act(async()=>{root.render(React.createElement(PmcPlanner,{key:alignment}));await pause();});
+  const select=field('Yerleşim seçimi');
+  assert.equal(select.value,alignment);
+  assert.ok(select.selectedOptions[0].disabled && select.selectedOptions[0].hidden);
+  assert.ok([...select.options].every(option=>option.hidden || !['front','rear'].includes(option.value)));
+  assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.longCargoAlignment,alignment);
+  await change(select,'auto');
+  assert.equal(select.value,'auto');
+  assert.equal(select.querySelector('option[hidden]'),null);
+  assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.longCargoAlignment,'auto');
+ }
+});
+
 test('manual X controls and mouse/touch drag preserve Y and camera while clamping contour',async()=>{
  localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows:[{id:'long',name:'Long',length:400,width:88,height:166,quantity:1,weight:25,allowRotation:false,stackable:false}],config:{maxPallets:6,longCargo:true,longCargoAlignment:'right',mirrored:true}}));
  await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'manual-move'}));await pause();});await act(pause);

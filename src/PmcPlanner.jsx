@@ -98,6 +98,12 @@ export default function PmcPlanner({onImportAircraft}) {
   const volume = placements.reduce((sum, p) => sum + p.w * p.l * p.h / 1e6, 0);
   const overhangs = placements.filter(p => p.overhangCm > 0);
   const configForResult = result?.config || config;
+  const selectedAlignment = Object.keys(config.manualXAnchors ?? {}).length
+    ? 'manual'
+    : Object.keys(config.highEdgeAnchors ?? {}).length
+      ? 'high'
+      : config.longCargoAlignment || 'auto';
+  const isPreviousAlignment = ['front', 'rear'].includes(selectedAlignment);
   const envelopeArea = (PMC.shoulderX - PMC.margin) * PMC.maxHeight +
     (PMC.width - PMC.margin - PMC.shoulderX) * (PMC.maxHeight + contourHeight(PMC.width - PMC.margin)) / 2;
   const clippedVolume = placements.reduce((sum, item) => sum + (item.touchedPallets || [item.palletIndex]).reduce((v, index) => v + item.w * item.h * Math.max(0, Math.min(item.y + item.l, (index + 1) * PMC.length - PMC.margin) - Math.max(item.y, index * PMC.length + PMC.margin)), 0), 0);
@@ -205,8 +211,37 @@ export default function PmcPlanner({onImportAircraft}) {
             </select>
           </label>
           <label>En fazla palet<input aria-label="En fazla palet" type="number" min="1" max="20" step="1" value={config.maxPallets} onChange={e => updateConfig('maxPallets', e.target.value)}/></label>
-          <div className="pmc-overhang"><label className="pmc-checkbox"><input type="checkbox" checked={!!config.longCargo} onChange={e => setConfig(previous=>({...previous,longCargo:e.target.checked,allowOverhang:false}))}/> Tek PMC üzerinde uzun yük · TEST</label>{config.longCargo && <><label>Yerleşim seçimi<select aria-label="Yerleşim seçimi" value={config.manualXAnchors && Object.keys(config.manualXAnchors).length?'manual':config.highEdgeAnchors && Object.keys(config.highEdgeAnchors).length?'high':config.longCargoAlignment||'auto'} onChange={e=>{let next;if(e.target.value==='high'){if(!result || stale || busy || !result.config?.longCargo || !result.placements?.length)return;const highEdgeAnchors=Object.fromEntries(result.placements.map(b=>[b.id,{y:b.localY,w:b.w,l:b.l,h:b.h,rotated:b.rotated}]));next={...config,highEdgeAnchors,manualXAnchors:null};}else{next={...config,longCargoAlignment:e.target.value,highEdgeAnchors:null,manualXAnchors:null};}setConfig(next);calculate(rows,next);}}><option value="manual" disabled>Elle yatay konum</option><option value="auto">En az şematik pozisyon</option><option value="center">Ortalı · iki yana taşma</option><option value="front">Ön uzun kenar · X=0</option><option value="rear">Arka uzun kenar · X=243,84</option><option value="left">Sol kısa kenar · Y=0</option><option value="right">Sağ kısa kenar · Y=317,5</option><option value="high" disabled={!result || stale || busy || !result.config?.longCargo || !result.placements?.length}>Yüksek kenara hizala</option></select></label>
-          </>}</div>
+          <div className="pmc-overhang">
+            <label className="pmc-checkbox">
+              <input type="checkbox" checked={!!config.longCargo} onChange={e => setConfig(previous => ({...previous, longCargo:e.target.checked, allowOverhang:false}))}/>
+              Tek PMC üzerinde uzun yük · TEST
+            </label>
+            {config.longCargo && <label>Yerleşim seçimi
+              <select aria-label="Yerleşim seçimi" value={selectedAlignment} onChange={e => {
+                const alignment = e.target.value;
+                let next;
+                if (alignment === 'high') {
+                  if (!result || stale || busy || !result.config?.longCargo || !result.placements?.length) return;
+                  const highEdgeAnchors = Object.fromEntries(result.placements.map(box => [
+                    box.id, {y:box.localY, w:box.w, l:box.l, h:box.h, rotated:box.rotated}
+                  ]));
+                  next = {...config, highEdgeAnchors, manualXAnchors:null};
+                } else {
+                  next = {...config, longCargoAlignment:alignment, highEdgeAnchors:null, manualXAnchors:null};
+                }
+                setConfig(next);
+                calculate(rows, next);
+              }}>
+                {isPreviousAlignment && <option value={selectedAlignment} disabled hidden>Önceki yerleşim</option>}
+                <option value="manual" disabled>Elle yatay konum</option>
+                <option value="auto">En az şematik pozisyon</option>
+                <option value="center">Ortalı · iki yana taşma</option>
+                <option value="left">Sol kısa kenar · Y=0</option>
+                <option value="right">Sağ kısa kenar · Y=317,5</option>
+                <option value="high" disabled={!result || stale || busy || !result.config?.longCargo || !result.placements?.length}>Yüksek kenara hizala</option>
+              </select>
+            </label>}
+          </div>
           {!config.longCargo && <details className="pmc-overhang"><summary>Komşu palete üst taşma</summary><label className="pmc-checkbox"><input type="checkbox" checked={config.allowOverhang} onChange={e => updateConfig('allowOverhang', e.target.checked)}/> Üst taşma senaryosunu aç</label>{config.allowOverhang && <><label>İzin verilen en fazla taşma (cm)<input type="number" min="0.1" max="300.5" step="0.1" value={config.maxOverhangCm ?? ''} placeholder="Onaylı değeri girin" onChange={e => updateConfig('maxOverhangCm', e.target.value)}/></label><label>Taşmanın başlayabileceği yükseklik (cm)<input type="number" min="0.1" step="0.1" value={config.minOverhangHeightCm ?? ''} placeholder="Onaylı değeri girin" onChange={e => updateConfig('minOverhangHeightCm', e.target.value)}/></label></>}</details>}
         </div>
       </aside>
