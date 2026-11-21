@@ -1,4 +1,4 @@
-import { PMC, orientations, ORIENTATION_MODES } from './pmc-engine.mjs';
+import { PMC, orientations, ORIENTATION_MODES, supportCoverage } from './pmc-engine.mjs';
 
 const EPS = 1e-6;
 const ALIGNMENTS = ['center', 'front', 'rear', 'left', 'right'];
@@ -44,14 +44,15 @@ function axisRange(size, deckSize) {
   return { min:Math.min(PMC.margin, far), max:Math.max(PMC.margin, far) };
 }
 
-function placementBounds({w,l,h}, mirrored) {
-  if (h > PMC.maxHeight + EPS) return null;
+function placementBounds({w,l,h}, mirrored, z = 0) {
+  const top = z + h;
+  if (top > PMC.maxHeight + EPS) return null;
   const x = axisRange(w, PMC.width);
   const y = axisRange(l, PMC.length);
-  if (h > PMC.lowHeight) {
+  if (top > PMC.lowHeight) {
     // Check the contour over the physical plate. Adjacent cells are only
     // reservations, so there is no aircraft profile to apply outside it.
-    const limit = profileLimit(h);
+    const limit = profileLimit(top);
     if (mirrored) x.min = Math.max(x.min, PMC.width - limit);
     else x.max = Math.min(x.max, limit - w);
   }
@@ -79,7 +80,7 @@ function placementGeometry(box) {
   const {x,y,w,l}=box;
   const positions=positionsFor(box);
   return {
-    ...box, z:0, positions, physicalPmcCount:1, positionCount:positions.length,
+    ...box, z:box.z ?? 0, positions, physicalPmcCount:1, positionCount:positions.length,
     blockedPositions:positions.filter(p=>!p.support),
     overhang:{left:Math.max(0,-x),right:Math.max(0,x+w-PMC.width),front:Math.max(0,-y),rear:Math.max(0,y+l-PMC.length)},
     usableBoundaryExcess:{left:Math.max(0,PMC.margin-x),right:Math.max(0,x+w-(PMC.width-PMC.margin)),front:Math.max(0,PMC.margin-y),rear:Math.max(0,y+l-(PMC.length-PMC.margin))},
@@ -155,29 +156,41 @@ function prepareItem(row, number, config, warnings) {
   return {id,row,candidates,choices,minArea,requested};
 }
 
-function originOptions(range, preferred, fixed, neighbors, axis, sizeKey, size) {
+function originOptions(range, preferred, fixed, blockers, supports, axis, sizeKey, size) {
   if (fixed) return [preferred];
   const options = new Set([clamp(preferred,range.min,range.max), range.min,range.max]);
-  for (const box of neighbors) {
-    for (const coordinate of [box[axis]+box[sizeKey], box[axis]-size]) {
-      if (within(coordinate,range)) options.add(clamp(coordinate,range.min,range.max));
-    }
+  const add = coordinate => {
+    if (within(coordinate,range)) options.add(clamp(coordinate,range.min,range.max));
+  };
+  for (const box of blockers) {
+    add(box[axis]+box[sizeKey]);
+    add(box[axis]-size);
+  }
+  for (const surface of supports) {
+    add(surface[axis]);
+    add(surface[axis]+surface[sizeKey]-size);
   }
   return [...options].sort((a,b) => Math.abs(a-preferred)-Math.abs(b-preferred));
 }
 
-function findOrigin(choice, bounds, neighbors, bias) {
+function findOrigin(choice, bounds, blockers, supports, {bias,z}) {
   const preferredX = choice.fixedX ? choice.x : bias==='high-x' ? bounds.x.max : bias==='low-x' ? bounds.x.min : choice.x;
-  const preferredY = !choice.fixedY && bias && neighbors.length ? bounds.y.min : choice.y;
-  const xs = originOptions(bounds.x,preferredX,choice.fixedX,neighbors,'x','w',choice.w);
-  const ys = originOptions(bounds.y,preferredY,choice.fixedY,neighbors,'y','l',choice.l);
+  const preferredY = !choice.fixedY && bias && blockers.length ? bounds.y.min : choice.y;
+  const xs = originOptions(bounds.x,preferredX,choice.fixedX,blockers,supports,'x','w',choice.w);
+  const ys = originOptions(bounds.y,preferredY,choice.fixedY,blockers,supports,'y','l',choice.l);
   for (const y of ys) {
-    const row = neighbors.filter(box => overlap(y,choice.l,box.y,box.l));
+    const row = blockers.filter(box => overlap(y,choice.l,box.y,box.l));
     for (const x of xs) {
       if (row.some(box => overlap(x,choice.w,box.x,box.w))) continue;
-      const {fixedX,fixedY,...box}=choice;
+      const {fixedX,fixedY,...dimensions}=choice;
+      const box = {...dimensions,x,y,z};
+      const support = z > EPS ? supportCoverage(box,supports) : null;
+      if (support && !support.fullySupported) continue;
       const shifted = Math.abs(x-choice.x)>EPS || Math.abs(y-choice.y)>EPS;
-      return {...box, x,y, alignment:shifted && choice.alignment==='center' ? 'group' : choice.alignment};
+      return {...box,
+        alignment:shifted && choice.alignment==='center' ? 'group' : choice.alignment,
+        supportIds:support?.supportIds ?? [],
+      };
     }
   }
   return null;
@@ -188,11 +201,16 @@ function compareScore(a,b) {
   return 0;
 }
 
-function fitItem(item, pallet, bias) {
+function fitItem(item, pallet, {bias,z=0,mirrored=false} = {}) {
   let best = null;
   let bestScore;
-  for (const {choice,bounds} of item.choices) {
-    const box = findOrigin(choice,bounds,pallet.boxes,bias);
+  const supports = z > EPS ? pallet.boxes.filter(box => box.stackable && Math.abs(box.z+box.h-z)<=EPS) : [];
+  for (const {choice,bounds:floorBounds} of item.choices) {
+    if (z > EPS && choice.alignment==='manual') continue;
+    const bounds = z > EPS ? placementBounds(choice,mirrored,z) : floorBounds;
+    if (!bounds || (choice.fixedX && !within(choice.x,bounds.x))) continue;
+    const blockers = pallet.boxes.filter(box => overlap(z,choice.h,box.z,box.h));
+    const box = findOrigin(choice,bounds,blockers,supports,{bias,z});
     if (!box) continue;
     const positions = positionsFor(box);
     const added = positions.reduce((n,position) => n + Number(!pallet.reserved.has(position.id)),0);
@@ -202,7 +220,7 @@ function fitItem(item, pallet, bias) {
       ALIGNMENTS.indexOf(choice.alignment),
     ];
     if (!best || compareScore(score,bestScore)<0) {
-      best={item,...box};
+      best={item,...box,id:item.id,stackable:item.row.stackable === true};
       bestScore=score;
     }
   }
@@ -211,7 +229,7 @@ function fitItem(item, pallet, bias) {
 
 function addToPallet(pallet, box) {
   pallet.boxes.push(box);
-  pallet.minArea += box.item.minArea;
+  if (box.z <= EPS) pallet.minArea += box.item.minArea;
   for (const position of positionsFor(box)) pallet.reserved.set(position.id,position);
 }
 
@@ -221,16 +239,26 @@ const bySize = (a,b) =>
   b.row.height - a.row.height || b.minArea - a.minArea;
 
 function rearrangePallet(pallet, item, mirrored) {
+  if (pallet.boxes.some(box => box.z>EPS)) return null;
   const items = [...pallet.boxes.map(box => box.item), item].sort(bySize);
   const biases = mirrored ? ['high-x','low-x'] : ['low-x','high-x'];
   for (const bias of biases) {
     const rearranged = emptyPallet();
     for (const queued of items) {
-      const box = fitItem(queued, rearranged, bias);
+      const box = fitItem(queued, rearranged, {bias});
       if (!box) break;
       addToPallet(rearranged, box);
     }
     if (rearranged.boxes.length===items.length) return rearranged;
+  }
+  return null;
+}
+
+function fitAboveFloor(item, pallet, mirrored) {
+  const levels = [...new Set(pallet.boxes.filter(box => box.stackable).map(box => box.z+box.h))].sort((a,b)=>a-b);
+  for (const z of levels) {
+    const box = fitItem(item,pallet,{z,mirrored});
+    if (box) return box;
   }
   return null;
 }
@@ -263,6 +291,14 @@ function groupItems(items, maxPallets, mirrored) {
     }
     if (rearranged) continue;
 
+    const stacked = pallets.find(pallet => {
+      const box = fitAboveFloor(item,pallet,mirrored);
+      if (!box) return false;
+      addToPallet(pallet,box);
+      return true;
+    });
+    if (stacked) continue;
+
     if (pallets.length<maxPallets) {
       const pallet = emptyPallet();
       const box = fitItem(item,pallet);
@@ -272,7 +308,7 @@ function groupItems(items, maxPallets, mirrored) {
         continue;
       }
     }
-    unplaced.push({id:item.id,name:item.row.name,reason:'Parçalar çakışmadan veya konturu aşmadan mevcut PMC’lere yerleşemedi; fiziksel PMC sınırına ulaşıldı.'});
+    unplaced.push({id:item.id,name:item.row.name,reason:'Mevcut PMC’lerde uygun taban alanı veya tam destekli bir üst yüzey bulunamadı; fiziksel PMC sınırına ulaşıldı.'});
   }
   return {pallets,unplaced};
 }
@@ -302,9 +338,9 @@ export function runLongCargo(rows,config={}) {
     const parts=pallet.boxes.map(({item,...placement})=>{
       const box=placementGeometry(placement);
       const part={...box,id:item.id,rowId:item.row.id,name:item.row.name,color:item.row.color,
-        weight:item.row.weight??null,stackable:false,palletIndex:index,touchedPallets:[index],
+        weight:item.row.weight??null,palletIndex:index,touchedPallets:[index],
         localY:box.y,y:box.y+index*PMC.length,overhangCm:Math.max(...Object.values(box.overhang)),
-        reviewRequired:true,supportId:null,supportIds:[],
+        reviewRequired:true,supportId:box.supportIds.length===1 ? box.supportIds[0] : null,
         candidates:item.candidates.filter(candidate => {
           const bounds=placementBounds(candidate,!!config.mirrored);
           return bounds && within(candidate.x,bounds.x) && within(candidate.y,bounds.y);

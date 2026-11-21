@@ -164,6 +164,21 @@ test('the long cargo screen renders shared pieces and a single shared overhang r
  assert.equal(button('Uçak paletlerine ekle'),undefined);
 });
 
+test('the long cargo screen displays a supported upper layer and locks manual movement of the stack',async()=>{
+ const rows=[80,80,65,80].map((width,i)=>({id:'fixture-'+i,name:'Yük '+i,length:400,width,height:i===3?40:60,quantity:1,weight:25,allowRotation:true,stackable:true}));
+ localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows,config:{maxPallets:1,longCargo:true,longCargoAlignment:'center'}}));
+ await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'stacked-long-pmc'}));await pause();});
+ await act(pause);
+ const details=document.querySelector('.pmc-long-details');
+ assert.match(details.textContent,/1 fiziksel PMC · 4 parça · 3 şematik pozisyon/);
+ assert.match(details.textContent,/Üst katman · Z 60 cm/);
+ await click(document.querySelector('.pmc-move-controls input[type=checkbox]'));
+ const upper=document.querySelector('.pmc-scene-item-label[data-item-id="fixture-3:1"]');
+ await act(async()=>upper.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
+ assert.match(document.querySelector('.pmc-move-controls [role=alert]').textContent,/taban desteği korunur/);
+ assert.equal(field('Yatay X (cm)'),null);
+});
+
 test('saved long-edge placement stays intact until a new alignment is selected',async()=>{
  const rows=[{id:'long',name:'Long',length:400,width:88,height:60,quantity:1,weight:25,allowRotation:false,stackable:false}];
  for (const alignment of ['front','rear']) {

@@ -12,7 +12,7 @@ function PieceDetails({piece}) {
   const {overhang,usableBoundaryExcess}=piece;
   return <section>
     <h4>{piece.name} · {piece.id}</h4>
-    <p>{names[piece.alignment]} · {piece.rotated ? '90° döndürülmüş' : 'Orijinal yön'}</p>
+    <p>{piece.z>0 && <>Üst katman · Z {format(piece.z)} cm · </>}{names[piece.alignment]} · {piece.rotated ? '90° döndürülmüş' : 'Orijinal yön'}</p>
     <p>Fiziksel plaka kenarından taşma: ön uzun kenar {measure(overhang.left)} · arka uzun kenar {measure(overhang.right)} · sol kısa kenar {measure(overhang.front)} · sağ kısa kenar {measure(overhang.rear)}.</p>
     <p>Net kullanılabilir sınır aşımı (8,5 cm kenar boşluğu dahil): ön uzun {measure(usableBoundaryExcess.left)} · arka uzun {measure(usableBoundaryExcess.right)} · sol kısa {measure(usableBoundaryExcess.front)} · sağ kısa {measure(usableBoundaryExcess.rear)}.</p>
     <p>{piece.rationale}</p>
@@ -28,7 +28,7 @@ function PieceDetails({piece}) {
 export default function LongCargoDetails({pallets}) {
   return <section className="pmc-long-details">
     <h3>Şematik uçak pozisyonları</h3>
-    <p>Her PMC ayrı bir tek katmanlı senaryodur. Aynı PMC’deki parçaların taşma alanları birlikte gösterilir. S(x,y) adresleri örnektir.</p>
+    <p>Her PMC ayrı bir senaryodur. Aynı PMC’deki parçaların taşma alanları birlikte gösterilir. S(x,y) adresleri örnektir.</p>
     {pallets.map(pallet=><article key={pallet.index}>
       <h4>PMC {String(pallet.index+1).padStart(2,'0')}</h4>
       <p><b>1 fiziksel PMC</b> · <b>{pallet.items.length} parça</b> · <b>{pallet.positionCount} şematik pozisyon</b></p>

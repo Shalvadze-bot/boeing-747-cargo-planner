@@ -40,8 +40,13 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
   const selected = placements.find(p => p.id === selectedItemId);
   useEffect(()=>{setXDraft(selected?String(Number(selected.x.toFixed(2))):'');},[selected?.id,selected?.x]);
   function commitX(){if(xDraft.trim()!=='' && Number.isFinite(Number(xDraft)) && limits?.valid){const x=Math.max(limits.min,Math.min(limits.max,Number(xDraft)));moveTo(x);setXDraft(String(Number(x.toFixed(2))));}else setXDraft(selected?String(Number(selected.x.toFixed(2))):'');}
-  const limitsFor = item => lateralBounds(item, mirrorContour,
-    placements.filter(other => other.palletIndex === item.palletIndex && other.id !== item.id));
+  const limitsFor = item => {
+    const neighbors = placements.filter(other => other.palletIndex === item.palletIndex && other.id !== item.id);
+    if (item.z > 0 || neighbors.some(other => other.supportIds?.includes(item.id))) {
+      return {valid:false,reason:'İstifteki parçaların taban desteği korunur. Konumlarını değiştirmek için yerleşimi yeniden hesaplayın.'};
+    }
+    return lateralBounds(item, mirrorContour, neighbors.filter(other => other.z < item.z + item.h - 1e-6));
+  };
   const limits = selected ? limitsFor(selected) : null;
   const validPosition=limits?.valid && selected.x>=limits.min-1e-6 && selected.x<=limits.max+1e-6;
   const units=n=>`${fmt(n)} cm / ${fmt(n/2.54)} in`;
@@ -137,10 +142,10 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
         {indices.map(i=>{const p=project(point(W/2,i*L+L/2,-7));return <g key={`label-${i}`} className="pmc-scene-pallet-label"><text x={p[0]} y={p[1]+26} textAnchor="middle">PMC {String(i+1).padStart(2,'0')}</text></g>;})}
         {visible.filter(p=>p.z<heightCut).map(item=>{const p=project(point(item.x+item.w/2,item.y+item.l/2,item.z+Math.min(item.h,heightCut-item.z)));return <g key={`select-${item.id}`} data-item-id={item.id} role="button" tabIndex={0} aria-label={`${item.name}, ${item.id}, ${fmt(item.w)} × ${fmt(item.l)} × ${fmt(item.h)} santimetre. Seç.`} aria-pressed={selectedItemId===item.id} className="pmc-scene-item-label" onClick={()=>select(item)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelectItem?.(item.id);}}} transform={`translate(${p[0]},${p[1]})`}><circle r="15" fill="transparent"/>{labels && <><rect x="-29" y="-12" width="58" height="22" rx="5" fill="#0a1427" fillOpacity=".84" stroke={selectedItemId===item.id?'#f5ca56':'#f8fafc'} strokeOpacity=".25"/><text textAnchor="middle" y="3">{String(item.id).length>9?String(item.id).slice(-9):item.id}</text></>}</g>;})}
         {visible.filter(b=>b.overhang).flatMap(b=>{const base=b.palletIndex*L, o=b.overhang, t=(edge,n)=>`${edge} ${fmt(n)} cm / ${fmt(n/2.54)}″`;return [
-          o.front>0 && dimension(point(b.x+b.w+12,b.y,12),point(b.x+b.w+12,base,12),t('Sol kısa',o.front),`${b.id}-overhang-front`),
-          o.rear>0 && dimension(point(b.x+b.w+12,base+L,12),point(b.x+b.w+12,b.y+b.l,12),t('Sağ kısa',o.rear),`${b.id}-overhang-rear`),
-          o.left>0 && dimension(point(b.x,base+L/2,b.h+12),point(0,base+L/2,b.h+12),t('Ön uzun',o.left),`${b.id}-overhang-left`),
-          o.right>0 && dimension(point(W,base+L/2,b.h+12),point(b.x+b.w,base+L/2,b.h+12),t('Arka uzun',o.right),`${b.id}-overhang-right`)
+          o.front>0 && dimension(point(b.x+b.w+12,b.y,b.z+12),point(b.x+b.w+12,base,b.z+12),t('Sol kısa',o.front),`${b.id}-overhang-front`),
+          o.rear>0 && dimension(point(b.x+b.w+12,base+L,b.z+12),point(b.x+b.w+12,b.y+b.l,b.z+12),t('Sağ kısa',o.rear),`${b.id}-overhang-rear`),
+          o.left>0 && dimension(point(b.x,base+L/2,b.z+b.h+12),point(0,base+L/2,b.z+b.h+12),t('Ön uzun',o.left),`${b.id}-overhang-left`),
+          o.right>0 && dimension(point(W,base+L/2,b.z+b.h+12),point(b.x+b.w,base+L/2,b.z+b.h+12),t('Arka uzun',o.right),`${b.id}-overhang-right`)
         ];})}
         {dimension(point(0,first*L-24),point(W,first*L-24),'96″ / 243,84 cm · X','dim-x')}
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}

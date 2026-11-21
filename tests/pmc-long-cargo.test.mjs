@@ -82,3 +82,43 @@ test('the contour blocks wide high cargo and the low-side legacy alignment',()=>
  const legacy=runLongCargo([row],{longCargoAlignment:'rear'});
  assert.equal(legacy.summary.placedCount,0);
 });
+
+const stackingRows = [80,80,65,80].map((width,i) => ({
+ ...row,id:'stack-'+i,width,height:i===3?40:60,stackable:true,allowRotation:true,
+}));
+
+test('fourth long piece stacks on fully supporting pieces and keeps the two-sided overhang',()=>{
+ for(const mirrored of [false,true]){
+  const result=runLongCargo(stackingRows,{longCargoAlignment:'center',maxPallets:1,mirrored});
+  assert.equal(result.summary.placedCount,4);
+  assert.equal(result.summary.physicalPmcCount,1);
+  assert.equal(result.summary.positionCount,3);
+  const upper=result.placements.find(b=>b.rowId==='stack-3');
+  assert.equal(upper.z,60);
+  assert.equal(upper.z+upper.h,100);
+  assert.equal(upper.overhang.front,41.25);
+  assert.equal(upper.overhang.rear,41.25);
+  assert.ok(upper.supportIds.length>0);
+  assert.ok(upper.supportIds.every(id=>result.placements.some(b=>b.id===id && b.stackable && b.z+b.h===upper.z)));
+ }
+});
+
+test('stacking requires enough surface area with permission',()=>{
+ for(const allowNarrow of [false,true]){
+  const rows=stackingRows.map((piece,i)=>({...piece,stackable:allowNarrow && i===2}));
+  const result=runLongCargo(rows,{longCargoAlignment:'center',maxPallets:1});
+  assert.equal(result.summary.placedCount,3);
+  assert.equal(result.unplaced[0].id,'stack-3:1');
+  assert.ok(result.placements.every(b=>b.z===0));
+ }
+});
+
+test('stacking cannot exceed the contour or extend beyond a supporting piece',()=>{
+ const base={...row,width:225,height:60,stackable:true};
+ for(const changes of [{height:70},{length:410,height:40}]){
+  const upper={...base,id:'upper',stackable:false,...changes};
+  const result=runLongCargo([base,upper],{maxPallets:1,longCargoAlignment:'center'});
+  assert.equal(result.summary.placedCount,1);
+  assert.equal(result.unplaced[0].id,'upper:1');
+ }
+});
