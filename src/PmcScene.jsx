@@ -24,7 +24,7 @@ function cuboid(x, y, z, w, l, h) {
   ];
 }
 
-export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
+export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
   const [moveMode,setMoveMode]=useState(false);
   const [xDraft,setXDraft]=useState('');
   const moveOrigins=useRef({});
@@ -79,13 +79,19 @@ export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1
   const highX=mirrorContour?W:0, shoulderX=mirrorContour?W-100.33:100.33, lowX=mirrorContour?0:W;
   const highDimX=highX+(mirrorContour?18:-18), lowDimX=lowX+(mirrorContour?-22:22);
   return <section className="pmc-scene" aria-label="Üç boyutlu PMC yük yerleşimi">
-    <div className="pmc-scene-toolbar"><div className="pmc-scene-view-buttons" role="group" aria-label="Kamera görünümü">
-      <button type="button" onClick={reset} title="İzometrik görünüm">İzometrik</button>
-      <button type="button" aria-pressed={camera === NOSE_TO_TAIL} onClick={()=>{setCamera(NOSE_TO_TAIL);setZoom(1);}}>Burundan kuyruğa</button>
-      <button type="button" onClick={()=>{setCamera({yaw:0,pitch:Math.PI/2-.001});setZoom(1);}}>Üst</button>
-    </div><div className="pmc-scene-zoom" role="group" aria-label="Yakınlaştırma">
-      <button type="button" aria-label="Uzaklaştır" onClick={()=>setZoom(z=>Math.max(.55,z-.15))}>−</button><span>{Math.round(zoom*100)}%</span><button type="button" aria-label="Yakınlaştır" onClick={()=>setZoom(z=>Math.min(2.5,z+.15))}>+</button><button type="button" aria-label="Kamerayı sıfırla" title="Kamerayı sıfırla" onClick={reset}>↺</button>
-    </div></div>
+    <div className="pmc-scene-toolbar">
+      <div className="pmc-scene-actions">
+        <div className="pmc-scene-view-buttons" role="group" aria-label="Kamera görünümü">
+          <button type="button" onClick={reset} title="İzometrik görünüm">İzometrik</button>
+          <button type="button" aria-pressed={camera === NOSE_TO_TAIL} onClick={()=>{setCamera(NOSE_TO_TAIL);setZoom(1);}}>Burundan kuyruğa</button>
+          <button type="button" onClick={()=>{setCamera({yaw:0,pitch:Math.PI/2-.001});setZoom(1);}}>Üst</button>
+        </div>
+        {placementAction}
+      </div>
+      <div className="pmc-scene-zoom" role="group" aria-label="Yakınlaştırma">
+        <button type="button" aria-label="Uzaklaştır" onClick={()=>setZoom(z=>Math.max(.55,z-.15))}>−</button><span>{Math.round(zoom*100)}%</span><button type="button" aria-label="Yakınlaştır" onClick={()=>setZoom(z=>Math.min(2.5,z+.15))}>+</button><button type="button" aria-label="Kamerayı sıfırla" title="Kamerayı sıfırla" onClick={reset}>↺</button>
+      </div>
+    </div>
     {onMoveCargo && <div className="pmc-move-controls">
       <label><input type="checkbox" checked={moveMode} onChange={e=>{setMoveMode(e.target.checked);moveOrigins.current={};}}/> Yükü taşı · kamera sabit</label>
       {moveMode && (!selected?<p>Taşımak için yükü seçin. Yalnızca yüksek/alçak kenar yönünde hareket eder.</p>:<>

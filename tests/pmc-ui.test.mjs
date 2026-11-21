@@ -90,7 +90,10 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  assert.equal(button('JSON indir').disabled,true);
  await click(field('Yük 1 üstüne yük konabilir'));
  assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).rows[0].stackable,false);
- await click(button('Paletlere yerleştir'));
+ const originalPlace = document.querySelector('.pmc-input-footer .primary');
+ const scenePlace = document.querySelector('.pmc-scene-toolbar .primary');
+ assert.equal(scenePlace.textContent,originalPlace.textContent);
+ await click(scenePlace);
  assert.equal(document.querySelector('.pmc-stale'),null);
  assert.equal(document.querySelector('.pmc-errors'),null);
  await click(button('Yük ekle'));
