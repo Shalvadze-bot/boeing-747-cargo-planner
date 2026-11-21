@@ -31,8 +31,20 @@ export function importPmcPallets({cargo,plan,locked=[],result,weights}) {
 }
 
 // Uniform scale keeps each imported pallet's real aspect ratios; aircraft bays are schematic.
-export function pmcBoxTransforms(item,{x,y,z,maxLength=6.5,maxWidth=2.05,maxHeight=1.85}) {
+export function pmcBoxTransforms(item,{x,y,z,maxLength=6.5,maxWidth=2.05,maxHeight=1.85,turned=false}) {
   if(!Array.isArray(item.pmc?.items))return [];
-  const scale=Math.min(maxLength/item.l,maxWidth/item.w,maxHeight/Math.max(item.h,1));
-  return item.pmc.items.map(box=>({id:box.id,color:box.color,size:[box.l*scale,box.h*scale,box.w*scale],position:[x+(box.y+box.l/2-item.l/2)*scale,y+.06+(box.z+box.h/2)*scale,z+(box.x+box.w/2-item.w/2)*scale]}));
+  const scale=Math.min(
+    (turned?maxWidth:maxLength)/item.l,
+    (turned?maxLength:maxWidth)/item.w,
+    maxHeight/Math.max(item.h,1)
+  );
+  return item.pmc.items.map(box=>{
+    const along=(box.y+box.l/2-item.l/2)*scale;
+    const across=(box.x+box.w/2-item.w/2)*scale;
+    return {
+      id:box.id,color:box.color,
+      size:[(turned?box.w:box.l)*scale,box.h*scale,(turned?box.l:box.w)*scale],
+      position:[x+(turned?-across:along),y+.06+(box.z+box.h/2)*scale,z+(turned?along:across)]
+    };
+  });
 }

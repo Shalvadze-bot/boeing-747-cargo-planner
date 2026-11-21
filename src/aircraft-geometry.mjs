@@ -1,191 +1,109 @@
-/**
- * @license SPDX-License-Identifier: Apache-2.0
- * Aircraft geometry restored from ThreeCargoDigitalTwin.tsx in the user's
- * original Sites source, commit ff2cbef8ffb36e9041f242c6f10af0f1eb1f5b3d.
- * Preserves its procedural shell, hump, hinged nose, wings, engines and tail.
- * Schematic visual only. No original capacities, station mapping or CG model.
- */
+// Schematic A330-243F geometry, shared by the aircraft planner and PMC preview.
 import * as THREE from 'three';
+import {AIRCRAFT_LENGTH, AIRCRAFT_SPAN, AIRCRAFT_WIDTH, aircraftSlots} from './aircraft-profile.mjs';
+
+export const DECK_HEIGHT = {main: -0.03, lower: -1.79};
+
 export function buildAircraft(scene) {
-    // Aircraft Root Group
-    const aircraftGroup = new THREE.Group();
-    scene.add(aircraftGroup);
+  const aircraftGroup = new THREE.Group();
+  scene.add(aircraftGroup);
+  const halfLength = AIRCRAFT_LENGTH / 2;
+  const radius = AIRCRAFT_WIDTH / 2;
+  const profile = [
+    [-halfLength, 0], [-28.6, 1], [-27.4, 1.85], [-25.4, 2.55], [-22.5, radius],
+    [16.5, radius], [20, 2.5], [23, 1.98], [26.8, 1.2], [halfLength, 0.14]
+  ];
+  const shell = new THREE.LatheGeometry(profile.map(([x, r]) => new THREE.Vector2(r, x)), 48);
+  shell.rotateZ(-Math.PI / 2);
+  const fuselageMat = new THREE.MeshPhysicalMaterial({
+    color: 0x94a3b8, metalness: .3, roughness: .35, transparent: true, opacity: .22, depthWrite: false
+  });
+  const fuselageMesh = new THREE.Mesh(shell, fuselageMat);
+  const wireMesh = new THREE.LineSegments(new THREE.WireframeGeometry(shell),
+    new THREE.LineBasicMaterial({color: 0x38bdf8, transparent: true, opacity: .24}));
+  wireMesh.visible = false;
+  aircraftGroup.add(fuselageMesh, wireMesh);
 
-    // 1. Procedural Boeing 747-400F Fuselage Shell
-    // Length: ~70m -> 86 3D units, Radius: ~3.2m -> 3.2 3D units
-    const fuselageGeo = new THREE.CylinderGeometry(3.2, 3.2, 85, 36, 1, true);
-    fuselageGeo.rotateZ(Math.PI / 2);
+  const cockpit = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, 2.18),
+    new THREE.MeshBasicMaterial({color: 0x38bdf8}));
+  cockpit.position.set(-26.5, 1.78, 0);
+  aircraftGroup.add(cockpit);
 
-    const fuselageMat = new THREE.MeshPhysicalMaterial({
-      color: 0x94a3b8,
-      metalness: 0.3,
-      roughness: 0.3,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false,
-    });
-    const fuselageMesh = new THREE.Mesh(fuselageGeo, fuselageMat);
-    aircraftGroup.add(fuselageMesh);
+  const wingMat = new THREE.MeshStandardMaterial({
+    color: 0x506278, metalness: .45, roughness: .45, transparent: true, opacity: .68
+  });
+  function surface(points, material, thickness) {
+    const shape = new THREE.Shape(points.map(([x,z])=>new THREE.Vector2(x,z)));
+    return new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:thickness,bevelEnabled:false}),material);
+  }
+  const tip = AIRCRAFT_SPAN / 2;
+  const engineGeometry = new THREE.CylinderGeometry(1.21, 1.32, 4.15, 28);
+  engineGeometry.rotateZ(-Math.PI / 2);
+  const engineMaterial = new THREE.MeshStandardMaterial({color:0x64748b,metalness:.7,roughness:.3});
+  const inletGeometry = new THREE.CircleGeometry(1.05, 28);
+  inletGeometry.rotateY(-Math.PI / 2);
+  const inletMaterial = new THREE.MeshBasicMaterial({color:0x101923});
+  for (const side of [-1, 1]) {
+    const wing = surface([[-7.8,0],[6.8,tip],[10,tip],[4.1,0]],wingMat,.28);
+    wing.rotateX(Math.PI / 2);
+    wing.scale.y=side;
+    wing.position.y=-0.95;
+    const winglet = new THREE.Mesh(new THREE.BoxGeometry(2,.95,.17),wingMat);
+    winglet.position.set(8.2,-.53,side*(tip-.35));
+    const horizontalTail = surface([[18.8,0],[25.3,9.1],[27.2,9.1],[25.8,0]],wingMat,.2);
+    horizontalTail.rotateX(Math.PI / 2);
+    horizontalTail.scale.y=side;
+    horizontalTail.position.y=1.05;
+    const engine = new THREE.Mesh(engineGeometry,engineMaterial);
+    engine.position.set(-5.5,-3,side*8.2);
+    const inlet = new THREE.Mesh(inletGeometry,inletMaterial);
+    inlet.position.x=-2.085;
+    const pylon = new THREE.Mesh(new THREE.BoxGeometry(3,1.25,.22),wingMat);
+    pylon.position.set(.65,1.4,0);
+    engine.add(inlet,pylon);
+    aircraftGroup.add(wing,winglet,horizontalTail,engine);
+  }
+  const tail = surface([[17,1.2],[22.5,11],[25.5,11],[26.4,1.2]],wingMat,.28);
+  tail.position.z=-.14;
+  aircraftGroup.add(tail);
 
-    // Wireframe overlay for X-Ray mode
-    const wireGeo = new THREE.WireframeGeometry(fuselageGeo);
-    const wireMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 });
-    const wireMesh = new THREE.LineSegments(wireGeo, wireMat);
-    wireMesh.visible = false;
-    aircraftGroup.add(wireMesh);
+  // Aircraft left is positive Z when facing toward the nose (negative X).
+  const mainDoorGroup = new THREE.Group();
+  mainDoorGroup.position.set(-19.49,2.32,2.32);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(3.56,2.32,.08),
+    new THREE.MeshStandardMaterial({color:0x0e7490,transparent:true,opacity:.64}));
+  door.position.y=-1.16;
+  door.add(new THREE.LineSegments(new THREE.EdgesGeometry(door.geometry),new THREE.LineBasicMaterial({color:0x7dd3fc})));
+  mainDoorGroup.add(door);
+  aircraftGroup.add(mainDoorGroup);
+  const lowerDoorMaterial = new THREE.LineBasicMaterial({color:0x38bdf8});
+  const lowerDoorGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(2.55,1.27,.07));
+  for (const x of [-16.3,13.1]) {
+    const lowerDoor = new THREE.LineSegments(lowerDoorGeometry,lowerDoorMaterial);
+    lowerDoor.position.set(x,-1.12,-2.53);
+    aircraftGroup.add(lowerDoor);
+  }
 
-    // Cockpit & Upper Deck Hump (B747 signature)
-    const humpGeo = new THREE.SphereGeometry(3.3, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-    humpGeo.scale(2.8, 1.45, 0.95);
-    humpGeo.rotateZ(-Math.PI / 2);
-    humpGeo.translate(-24, 2.05, 0);
-    const humpMesh = new THREE.Mesh(humpGeo, fuselageMat);
-    aircraftGroup.add(humpMesh);
-
-    // Cockpit windshield windows
-    const windowGeo = new THREE.BoxGeometry(0.3, 0.8, 1.6);
-    const windowMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
-    const windowMesh = new THREE.Mesh(windowGeo, windowMat);
-    windowMesh.position.set(-35.5, 3.2, 0);
-    aircraftGroup.add(windowMesh);
-
-    // 2. Hinged Nose Cargo Door Visor (NCD)
-    // Pivot located at top of nose station (-36, 3.2, 0)
-    const noseDoorGroup = new THREE.Group();
-    noseDoorGroup.position.set(-36, 2.8, 0);
-    aircraftGroup.add(noseDoorGroup);
-
-    const noseVisorGeo = new THREE.ConeGeometry(3.1, 8.5, 32);
-    noseVisorGeo.rotateZ(Math.PI / 2);
-    noseVisorGeo.translate(-4.25, -2.8, 0);
-    const noseVisorMat = new THREE.MeshPhysicalMaterial({
-      color: 0x64748b,
-      metalness: 0.4,
-      roughness: 0.3,
-      transparent: true,
-      opacity: 0.45,
-    });
-    const noseVisorMesh = new THREE.Mesh(noseVisorGeo, noseVisorMat);
-    noseDoorGroup.add(noseVisorMesh);
-
-    // 3. Main Deck Side Cargo Door (SCD) outline (Port side, aft)
-    const scdGeo = new THREE.BoxGeometry(4.2, 3.2, 0.2);
-    const scdMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
-    const scdMesh = new THREE.Mesh(scdGeo, scdMat);
-    scdMesh.position.set(14.32, 0.6, -3.2);
-    aircraftGroup.add(scdMesh);
-
-    // 4. Swept-Back Wings with Winglets
-    const wingMat = new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      metalness: 0.45,
-      roughness: 0.45,
-      transparent: true,
-      opacity: 0.4,
-    });
-
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(0, 0);
-    wingShape.lineTo(-12, 43); // wingtip
-    wingShape.lineTo(-17.5, 43);
-    wingShape.lineTo(-24, 0); // wing root
-    wingShape.closePath();
-
-    const wingExtrude = new THREE.ExtrudeGeometry(wingShape, { depth: 0.35, bevelEnabled: true, bevelThickness: 0.1 });
-    wingExtrude.rotateX(Math.PI / 2);
-    wingExtrude.rotateY(-0.08); // dihedral
-    wingExtrude.translate(2, -0.6, 0);
-
-    const rightWing = new THREE.Mesh(wingExtrude, wingMat);
-    const leftWing = rightWing.clone();
-    leftWing.scale.z = -1;
-    aircraftGroup.add(rightWing);
-    aircraftGroup.add(leftWing);
-
-    // Winglets
-    const wingletGeo = new THREE.BoxGeometry(2.4, 3.2, 0.2);
-    const rightWinglet = new THREE.Mesh(wingletGeo, wingMat);
-    rightWinglet.position.set(-14.5, 2.5, 43);
-    rightWinglet.rotateX(-0.1);
-    aircraftGroup.add(rightWinglet);
-
-    const leftWinglet = rightWinglet.clone();
-    leftWinglet.position.z = -43;
-    leftWinglet.rotateX(0.2);
-    aircraftGroup.add(leftWinglet);
-
-    // 4 High-Bypass Turbofan Engines
-    const engineGeo = new THREE.CylinderGeometry(1.05, 0.95, 4.2, 20);
-    engineGeo.rotateZ(Math.PI / 2);
-    const engineMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 });
-
-    const enginePositions = [
-      { x: -5, y: -2.8, z: 12 },
-      { x: -10, y: -2.4, z: 22 },
-      { x: -5, y: -2.8, z: -12 },
-      { x: -10, y: -2.4, z: -22 },
-    ];
-    enginePositions.forEach((pos) => {
-      const eng = new THREE.Mesh(engineGeo, engineMat);
-      eng.position.set(pos.x, pos.y, pos.z);
-      aircraftGroup.add(eng);
-
-      // Pylon
-      const pylonGeo = new THREE.BoxGeometry(2.5, 1.2, 0.2);
-      const pylon = new THREE.Mesh(pylonGeo, wingMat);
-      pylon.position.set(pos.x, pos.y + 1.2, pos.z);
-      aircraftGroup.add(pylon);
-    });
-
-    // Tail Horizontal & Vertical Stabilizers
-    const hStabGeo = new THREE.BoxGeometry(10, 0.25, 29);
-    hStabGeo.translate(36, 1.9, 0);
-    const hStab = new THREE.Mesh(hStabGeo, wingMat);
-    aircraftGroup.add(hStab);
-
-    const vStabGeo = new THREE.BoxGeometry(12.5, 14.5, 0.35);
-    vStabGeo.translate(34, 7.8, 0);
-    const vStab = new THREE.Mesh(vStabGeo, wingMat);
-    aircraftGroup.add(vStab);
-
-    // 5. Main Deck Floor Group (Supported for Exploded Deck View)
-    const mainDeckGroup = new THREE.Group();
-    aircraftGroup.add(mainDeckGroup);
-
-    // Roller floor slab
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      metalness: 0.85,
-      roughness: 0.25,
-    });
-    const mdFloorGeo = new THREE.BoxGeometry(78, 0.18, 5.8);
-    const mdFloor = new THREE.Mesh(mdFloorGeo, floorMat);
-    mdFloor.position.set(2, 0.2, 0);
-    mainDeckGroup.add(mdFloor);
-
-    // Power Roller guide rails down the centerline
-    const railGeo = new THREE.BoxGeometry(76, 0.05, 0.08);
-    const railMat = new THREE.MeshBasicMaterial({ color: 0x64748b });
-    const centerRail = new THREE.Mesh(railGeo, railMat);
-    centerRail.position.set(2, 0.3, 0);
-    mainDeckGroup.add(centerRail);
-
-    // 6. Lower Deck Compartment Group
-    const lowerDeckGroup = new THREE.Group();
-    aircraftGroup.add(lowerDeckGroup);
-
-    const ldFloorGeo = new THREE.BoxGeometry(68, 0.18, 5.0);
-    const ldFloor = new THREE.Mesh(ldFloorGeo, floorMat);
-    ldFloor.position.set(2, -2.1, 0);
-    lowerDeckGroup.add(ldFloor);
-
-    const structure = aircraftGroup.children.filter(child => child !== mainDeckGroup && child !== lowerDeckGroup);
-    return { aircraftGroup, mainDeckGroup, lowerDeckGroup, noseDoorGroup, fuselageMesh, wireMesh, humpMesh, structure };
+  const mainDeckGroup = new THREE.Group(), lowerDeckGroup = new THREE.Group();
+  const floorMat = new THREE.MeshStandardMaterial({color:0x1e293b,metalness:.75,roughness:.3});
+  for (const [group, deck, segment, width] of [
+    [mainDeckGroup,'main',null,5.16],
+    [lowerDeckGroup,'lower','forward',3.35],
+    [lowerDeckGroup,'lower','aft',3.35]
+  ]) {
+    const positions = aircraftSlots.filter(s=>s.deck===deck&&(!segment||s.group===segment));
+    const first = positions[0], last = positions.at(-1);
+    const start = first.station-first.l/200, end = last.station+last.l/200;
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(end-start,.12,width),floorMat);
+    floor.position.set((start+end)/2,DECK_HEIGHT[deck]-.075,0);
+    group.add(floor);
+  }
+  const structure = [...aircraftGroup.children];
+  aircraftGroup.add(mainDeckGroup,lowerDeckGroup);
+  return {aircraftGroup,mainDeckGroup,lowerDeckGroup,mainDoorGroup,fuselageMesh,wireMesh,structure};
 }
 
-// The inactive upper floor must not conceal interactive lower-deck bays.
-// Exploded mode deliberately exposes both decks at their separated heights.
 export function applyDeckVisibility(model, selectedDeck, separated) {
-    model.mainDeckGroup.visible = selectedDeck !== 'lower' || separated;
-    model.lowerDeckGroup.visible = true;
+  model.mainDeckGroup.visible = selectedDeck !== 'lower' || separated;
+  model.lowerDeckGroup.visible = true;
 }

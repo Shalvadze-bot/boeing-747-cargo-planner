@@ -11,7 +11,7 @@ test('Pages serves built JavaScript and assets beneath the repository path', asy
   const files = await readdir('dist/client/assets');
   const js = (await Promise.all(files.filter(f => f.endsWith('.js')).map(f => readFile(`dist/client/assets/${f}`, 'utf8')))).join('');
   assert.ok(js.includes(`${base}assets/pallet.png`));
-  assert.ok(js.includes(`${base}assets/aircraft.png`));
+  assert.ok(js.includes(`${base}assets/a330-plan.svg`));
   await access('dist/client/assets/pallet.png');
-  await access('dist/client/assets/aircraft.png');
+  await access('dist/client/assets/a330-plan.svg');
 });

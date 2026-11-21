@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialCargo,initialPlan} from '../src/engine.mjs';
-import {AIRCRAFT_STORE,RECOVERY_STORE,isStarterDemo,starterDemos,readDemoRecovery,prepareDemoRemoval,removeDemosWithRecovery,undoDemoRemoval,saveAircraftState,withAircraftWriteLock} from '../src/demo-recovery.mjs';
+import {AIRCRAFT_STORE, readAircraftState,RECOVERY_STORE,isStarterDemo,starterDemos,readDemoRecovery,prepareDemoRemoval,removeDemosWithRecovery,undoDemoRemoval,saveAircraftState,withAircraftWriteLock} from '../src/demo-recovery.mjs';
 const custom={id:'PAL-09',name:'My PMC',weight:120000,l:317.5,w:243.84,h:140,priority:1,pmc:{items:[{id:'c1',l:100,w:80,h:140,x:8.5,y:8.5,z:0,color:'#123456'}]}};
 const base=()=>({cargo:structuredClone([...initialCargo,custom]),plan:{...initialPlan},locked:['M07','M03']});
 function memory(state){
@@ -127,4 +127,20 @@ test('aircraft write transactions use one exclusive cross-tab lock and fail clos
   globalThis.window={navigator:{}};
   await assert.rejects(withAircraftWriteLock(()=>assert.fail('must not run')),/kayıt kilidi/);
  }finally{if(old===undefined)delete globalThis.window;else globalThis.window=old;}
+});
+
+
+test('A330 migrates legacy cargo without converting Boeing slot or lock IDs',()=>{
+ const storage=memory();
+ const old=base(),raw=JSON.stringify(old);
+ storage.setItem('cargo-demo-v1',raw);
+ const current=readAircraftState(storage);
+ assert.equal(current.previousPlan,true);
+ assert.deepEqual(current.cargo,old.cargo);
+ assert.deepEqual(current.plan,{});
+ assert.deepEqual(current.locked,[]);
+ const newPlan={cargo:current.cargo,plan:{M01:'PAL-01'},locked:['M01']};
+ saveAircraftState(storage,newPlan,current.storageToken);
+ assert.deepEqual(readAircraftState(storage).plan,newPlan.plan);
+ assert.equal(storage.getItem('cargo-demo-v1'),raw);
 });

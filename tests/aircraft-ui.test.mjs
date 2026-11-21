@@ -26,6 +26,7 @@ test('aircraft opens by default; deck, distribution and PMC round trips preserve
  try {
   await act(async () => root.render(React.createElement(App)));
   assert.ok(document.querySelector('.workspace'));
+  assert.match(document.querySelector('h1').textContent,/A330-243F/);
   assert.equal(button('Uçak yerleşimi').className, 'active');
   assert.equal(button('3D uçak').className, 'active');
   // Native fullscreen rejection is nonfatal; Escape explicitly closes it.
@@ -48,10 +49,10 @@ test('aircraft opens by default; deck, distribution and PMC round trips preserve
   assert.ok(document.querySelector('.aircraft-3d'));
   assert.match(document.querySelector('.aircraft-3d-fallback').textContent, /Planınız korunuyor/);
   await click('Üstten');
-  assert.equal(document.querySelector('.aircraft-image').getAttribute('src'), '/boeing-747-cargo-planner/assets/aircraft.png');
-  assert.equal(document.querySelectorAll('.slot-grid .slot').length, 16);
+  assert.equal(document.querySelector('.aircraft-image').getAttribute('src'), '/boeing-747-cargo-planner/assets/a330-plan.svg');
+  assert.equal(document.querySelectorAll('.slot-grid .slot').length, 22);
   assert.match(document.querySelector('.warning').textContent, /SİMÜLASYON.*onaylı değildir/);
-  const savedAircraft = localStorage.getItem('cargo-demo-v1');
+  const savedAircraft = localStorage.getItem('cargo-demo-a330-v1');
   const savedPmc = localStorage.getItem('cargo-pmc-v1');
   const pmc = document.querySelector('.pmc-planner');
   assert.equal(pmc.parentElement.hidden, true);
@@ -73,19 +74,19 @@ test('aircraft opens by default; deck, distribution and PMC round trips preserve
   assert.ok(document.querySelector('.aircraft-image'));
   assert.equal(document.querySelectorAll('.slot-grid .slot').length, 8);
   await click('Ana Güverte');
-  assert.equal(document.querySelectorAll('.slot-grid .slot').length, 16);
-  assert.equal(localStorage.getItem('cargo-demo-v1'), savedAircraft);
+  assert.equal(document.querySelectorAll('.slot-grid .slot').length, 22);
+  assert.equal(localStorage.getItem('cargo-demo-a330-v1'), savedAircraft);
   assert.equal(localStorage.getItem('cargo-pmc-v1'), savedPmc);
   await click('Sabitle');
-  const lockedAircraft = localStorage.getItem('cargo-demo-v1');
+  const lockedAircraft = localStorage.getItem('cargo-demo-a330-v1');
   await click('3D uçak');
   await click('Güverteleri ayır');
-  await click('Burun kapısı aç');
+  await click('Ana kargo kapısını aç');
   assert.equal(button('Güverteleri ayır').getAttribute('aria-pressed'), 'true');
-  assert.ok(button('Burun kapısı kapat'));
-  await click('M01 · Boş');
+  assert.ok(button('Ana kargo kapısını kapat'));
+  await click('ABL · Boş');
   assert.match(document.querySelector('.toast').textContent, /kilidi kaldırın/);
-  assert.equal(localStorage.getItem('cargo-demo-v1'), lockedAircraft);
+  assert.equal(localStorage.getItem('cargo-demo-a330-v1'), lockedAircraft);
   await click('Üstten görünümü aç');
   assert.ok(document.querySelector('.aircraft-image'));
   assert.match(document.querySelector('.warning').textContent, /SİMÜLASYON/);

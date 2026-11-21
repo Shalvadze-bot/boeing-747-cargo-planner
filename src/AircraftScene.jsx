@@ -2,16 +2,17 @@ import React, {useEffect, useRef, useState} from 'react';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
-import {buildAircraft, applyDeckVisibility} from './aircraft-geometry.mjs';
-import {slots} from './engine.mjs';
+import {buildAircraft, applyDeckVisibility, DECK_HEIGHT} from './aircraft-geometry.mjs';
+import {slots, footprintOrientation} from './engine.mjs';
+import {slotLabel} from './aircraft-profile.mjs';
 import {pmcBoxTransforms} from './pmc-aircraft.mjs';
 import './aircraft-scene.css';
 
 const PRESETS = {
-  iso: {label:'Perspektif', eye:[-60,38,76], target:[0,0,0]},
+  iso: {label:'Perspektif', eye:[-45,35,65], target:[0,0,0]},
   top: {label:'Tepeden', eye:[0,100,0.1], target:[0,0,0]},
-  side: {label:'Yandan', eye:[0,1.5,105], target:[0,0,0]},
-  nose: {label:'Burundan', eye:[-110,6,0], target:[-20,2,0]},
+  side: {label:'Yandan', eye:[0,1.5,85], target:[0,0,0]},
+  nose: {label:'Burundan', eye:[-78,6,0], target:[-10,1,0]},
 };
 function disposeTree(root) {
   const geometries = new Set(), materials = new Set();
@@ -24,9 +25,9 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
   const latest = useRef(null);
   latest.current = {cargo, plan, locked, selected, deck, onSelect, onPlace, readOnly};
   const [error,setError] = useState(''), [retry,setRetry] = useState(0), [shell,setShell] = useState('cutaway');
-  const [separated,setSeparated] = useState(false), [nose,setNose] = useState(false), [full,setFull] = useState(false);
+  const [separated,setSeparated] = useState(false), [doorOpen,setDoorOpen] = useState(false), [full,setFull] = useState(false);
   const [hover,setHover] = useState(''), [fullscreenNotice,setFullscreenNotice] = useState('');
-  const visual = useRef(null); visual.current = {shell,separated,nose};
+  const visual = useRef(null); visual.current = {shell,separated,doorOpen};
   useEffect(()=>{
     const change=()=>setFull(document.fullscreenElement===wrapper.current);
     const escape=event=>{if(event.key==='Escape'&&document.fullscreenElement===wrapper.current){event.stopImmediatePropagation();document.exitFullscreen().catch(()=>setFullscreenNotice('Tam ekrandan çıkılamadı. Tarayıcının tam ekran denetimini kullanın.'));}};
@@ -80,23 +81,24 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
         const state=latest.current;
         slots.forEach(slot=>{
           const main=slot.deck==='main', group=main?mainBays:lowerBays;
-          // Synthetic normalized engine positions, not Boeing stations or scaled ULDs.
-          const x=-33+slot.x*68,z=slot.side?1.45:-1.45,y=main?.35:-1.95;
+          const x=slot.station,z=slot.lateral,y=DECK_HEIGHT[slot.deck];
+          const length=slot.l/100,width=slot.w/100;
           const item=state.cargo.find(c=>c.id===state.plan[slot.id]);
           const chosen=!!item&&item.id===state.selected;
           const active=slot.deck===state.deck;
           const color=chosen?0xfacc15:state.locked.includes(slot.id)?0xa78bfa:item?0x38bdf8:0x64748b;
-          const bay=new THREE.Mesh(new THREE.BoxGeometry(main?7.3:14.2,.08,2.3),new THREE.MeshBasicMaterial({color,transparent:true,opacity:active?.36:.12}));
+          const bay=new THREE.Mesh(new THREE.BoxGeometry(length,.08,width),new THREE.MeshBasicMaterial({color,transparent:true,opacity:active?.36:.12}));
           bay.position.set(x,y,z);bay.userData.slot=slot.id;group.add(bay);targets.push(bay);
+          const turned=item&&footprintOrientation(item,slot)==='turned';
           if(item?.pmc?.items?.length){
-            for(const box of pmcBoxTransforms(item,{x,y,z,maxLength:main?6.5:12.8,maxWidth:2.05,maxHeight:main?1.85:1.25})){
+            for(const box of pmcBoxTransforms(item,{x,y,z,maxLength:length,maxWidth:width,maxHeight:slot.h/100,turned})){
               const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color||'#38bdf8',roughness:.65,transparent:true,opacity:active?1:.35}));
               mesh.position.set(...box.position);mesh.userData.slot=slot.id;group.add(mesh);targets.push(mesh);
               mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:chosen?0xfacc15:0xffffff,transparent:true,opacity:chosen?.9:.35})));
             }
           }else if(item){
-            const height=main?1.85:1.25;
-            const mesh=new THREE.Mesh(new THREE.BoxGeometry(main?6.5:12.8,height,2.05),new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.32,transparent:true,opacity:active?1:.35}));
+            const height=Math.min(item.h,slot.h)/100;
+            const mesh=new THREE.Mesh(new THREE.BoxGeometry(Math.min((turned?item.w:item.l)/100,length),height,Math.min((turned?item.l:item.w)/100,width)),new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.32,transparent:true,opacity:active?1:.35}));
             mesh.position.set(x,y+height/2+.06,z);mesh.userData.slot=slot.id;group.add(mesh);targets.push(mesh);
             mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:chosen?0xfacc15:0xffffff,transparent:true,opacity:.5})));
           }
@@ -113,7 +115,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
       const listen=(target,type,handler,options)=>{target.addEventListener(type,handler,options);cleanups.push(()=>target.removeEventListener(type,handler,options));};
       let gesture=null; const pointers=new Set();
       listen(canvas,'pointerdown',e=>{pointers.add(e.pointerId);if(pointers.size===1&&e.button===0)gesture={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};else if(gesture)gesture.moved=true;});
-      listen(canvas,'pointermove',e=>{if(gesture&&Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)>5)gesture.moved=true;if(!pointers.size)setHover(latest.current.readOnly?'':pick(e)||'');});
+      listen(canvas,'pointermove',e=>{if(gesture&&Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)>5)gesture.moved=true;if(!pointers.size)setHover(latest.current.readOnly?'':slotLabel(pick(e))||'');});
       listen(window,'pointerup',e=>{
         const g=gesture; pointers.delete(e.pointerId);
         if(g?.id===e.pointerId){gesture=null;if(!g.moved&&e.target===canvas){const sid=pick(e);if(sid){const s=latest.current;if(s.readOnly)return;const id=s.plan[sid];if(id)s.onSelect(id);else s.onPlace(s.selected,sid);}}}
@@ -132,10 +134,9 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
         applyDeckVisibility(model,latest.current.deck,v.separated);
         model.mainDeckGroup.position.y=THREE.MathUtils.lerp(model.mainDeckGroup.position.y,v.separated?4.6:0,.12);
         model.lowerDeckGroup.position.y=THREE.MathUtils.lerp(model.lowerDeckGroup.position.y,v.separated?-4.6:0,.12);
-        model.noseDoorGroup.rotation.z=THREE.MathUtils.lerp(model.noseDoorGroup.rotation.z,v.nose?-Math.PI/3.2:0,.1);
+        model.mainDoorGroup.rotation.x=THREE.MathUtils.lerp(model.mainDoorGroup.rotation.x,v.doorOpen?-65*Math.PI/180:0,.1);
         model.structure.forEach(node=>{node.visible=v.shell!=='decks';});
         model.fuselageMesh.visible=v.shell!=='decks'&&v.shell!=='wire';
-        model.humpMesh.visible=model.fuselageMesh.visible;
         model.wireMesh.visible=v.shell==='wire';
         model.fuselageMesh.material.opacity=v.shell==='ghost'?.28:.16;
         controls.update();renderer.render(scene,camera);frame=requestAnimationFrame(render);
@@ -158,13 +159,13 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
       <div>{Object.entries(PRESETS).map(([key,p])=><button key={key} onClick={()=>api.current?.preset(key)}>{p.label}</button>)}</div>
       <label>Gövde <select value={shell} onChange={e=>setShell(e.target.value)}><option value="cutaway">Kesit</option><option value="ghost">Saydam</option><option value="wire">Tel kafes</option><option value="decks">Yalnız güverteler</option></select></label>
       <button aria-pressed={separated} onClick={()=>setSeparated(v=>!v)}>Güverteleri ayır</button>
-      <button aria-pressed={nose} onClick={()=>setNose(v=>!v)}>Burun kapısı {nose?'kapat':'aç'}</button>
+      <button aria-pressed={doorOpen} onClick={()=>setDoorOpen(v=>!v)}>Ana kargo kapısını {doorOpen?'kapat':'aç'}</button>
       {typeof document!=='undefined'&&document.fullscreenEnabled&&<button onClick={fullscreen}>{full?'Tam ekrandan çık':'Tam ekran'}</button>}
     </div>
     {fullscreenNotice&&<p className="aircraft-3d-hint" role="status">{fullscreenNotice}</p>}
     {readOnly?<div className="aircraft-3d-warning visual-preview-warning" role="note"><strong>YALNIZCA GÖRSEL ÖNİZLEME · AĞIRLIK DOĞRULANMADI</strong><span>Yükleme veya uçuş onayı değildir. Ölçü, ağırlık, denge ve operasyonel uygunluk kontrolü yapılmaz. Konumlar ve yük boyutları şematiktir.</span><span>Kaydedilmiş ağırlık: {cargo.find(item=>item.id===selected)?.weight?.toLocaleString('tr-TR')} kg · Değiştirilmedi, gerçek ağırlık olarak doğrulanmadı.</span><span>Bu görünüm kaydedilmiş planı, yerleşimi ve plan çıktısını değiştirmez.</span></div>:<div className="aircraft-3d-warning">SİMÜLASYON · Uçuş operasyonları için onaylı değildir. Konumlar ve yük boyutları şematiktir.</div>}
     <div className="aircraft-3d-viewport"><div ref={mount} className="aircraft-3d-canvas"/>{error&&<div className="aircraft-3d-fallback" role="status"><p>{error}</p><button onClick={()=>setRetry(n=>n+1)}>3D yeniden dene</button>{!readOnly&&<button onClick={onTopView}>Üstten görünümü aç</button>}</div>}</div>
     <p className="aircraft-3d-hint">Sürükle: döndür · Tekerlek / iki parmak: yakınlaştır · Sağ sürükle: kaydır. {readOnly?'Görsel önizleme: pozisyonlara tıklamak planı değiştirmez.':`${hover?hover+' · ':''}Seçili güvertedeki yüke tıklayın; boş pozisyona tıklayarak seçili paleti yerleştirin.`}</p>
-    {!readOnly&&<details className="aircraft-3d-positions"><summary>Klavye ile pozisyon seç / yerleştir · {deck==='main'?'Ana':'Alt'} güverte</summary><div>{slots.filter(s=>s.deck===deck).map(s=><button key={s.id} aria-pressed={!!plan[s.id]&&plan[s.id]===selected} onClick={()=>plan[s.id]?onSelect(plan[s.id]):onPlace(selected,s.id)}>{s.id} · {plan[s.id]||'Boş'}{locked.includes(s.id)?' · Sabit':''}</button>)}</div></details>}
+    {!readOnly&&<details className="aircraft-3d-positions"><summary>Klavye ile pozisyon seç / yerleştir · {deck==='main'?'Ana':'Alt'} güverte</summary><div>{slots.filter(s=>s.deck===deck).map(s=><button key={s.id} aria-pressed={!!plan[s.id]&&plan[s.id]===selected} onClick={()=>plan[s.id]?onSelect(plan[s.id]):onPlace(selected,s.id)}>{s.label} · {plan[s.id]||'Boş'}{locked.includes(s.id)?' · Sabit':''}</button>)}</div></details>}
   </section>;
 }

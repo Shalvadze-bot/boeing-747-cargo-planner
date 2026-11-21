@@ -1,6 +1,17 @@
-import {initialCargo,slots,place} from './engine.mjs';
+import {initialCargo,initialPlan,slots,place,violations} from './engine.mjs';
+import {AIRCRAFT_MODEL} from './aircraft-profile.mjs';
 
-export const AIRCRAFT_STORE='cargo-demo-v1';
+export const AIRCRAFT_STORE='cargo-demo-a330-v1';
+const PREVIOUS_AIRCRAFT_STORE='cargo-demo-v1';
+
+export function readAircraftState(storage) {
+ const raw=storage.getItem(AIRCRAFT_STORE);
+ const data=JSON.parse(raw ?? storage.getItem(PREVIOUS_AIRCRAFT_STORE));
+ if(!Array.isArray(data?.cargo))return {cargo:initialCargo,plan:initialPlan,locked:[],storageToken:raw};
+ if(raw===null)return {cargo:data.cargo,plan:{},locked:[],storageToken:null,previousPlan:Object.keys(data.plan||{}).length>0};
+ if(!data.plan||violations(data.plan,data.cargo,false).length)return {cargo:data.cargo,plan:{},locked:[],storageToken:raw};
+ return {...data,storageToken:raw};
+}
 export const RECOVERY_STORE='cargo-demo-recovery-v1';
 // All aircraft writes in the app share this cross-tab exclusive transaction.
 export function withAircraftWriteLock(operation){
@@ -62,7 +73,7 @@ export function prepareDemoRemoval(state){
  const placements=Object.fromEntries(Object.entries(state.plan).filter(([,id])=>ids.has(id)));
  return {
   next:{cargo:state.cargo.filter(item=>!ids.has(item.id)),plan:Object.fromEntries(Object.entries(state.plan).filter(([,id])=>!ids.has(id))),locked:(state.locked||[]).filter(sid=>!Object.hasOwn(placements,sid))},
-  recovery:{version:1,id:`${Date.now()}-${Math.random().toString(36).slice(2)}`,createdAt:new Date().toISOString(),restored:false,deletedCargo,placements,locked:(state.locked||[]).filter(sid=>Object.hasOwn(placements,sid))}
+  recovery:{version:1,aircraftModel:AIRCRAFT_MODEL,id:`${Date.now()}-${Math.random().toString(36).slice(2)}`,createdAt:new Date().toISOString(),restored:false,deletedCargo,placements,locked:(state.locked||[]).filter(sid=>Object.hasOwn(placements,sid))}
  };
 }
 export function removeDemosWithRecovery(storage,state){
@@ -86,6 +97,7 @@ export function prepareDemoRestore(state,recovery){
  const cargo=[...state.cargo,...added],plan={...state.plan},locked=[...(state.locked||[])],addedIds=new Set(added.map(item=>item.id)),unplaced=[];
  for(const [sid,id] of Object.entries(recovery.placements)){
   if(!addedIds.has(id))continue; // Never move or relock a record already in the user's current plan.
+  if(recovery.aircraftModel!==AIRCRAFT_MODEL){unplaced.push(id);continue;}
   if(plan[sid]||locked.includes(sid)||Object.values(plan).includes(id)){unplaced.push(id);continue;}
   const result=place(plan,cargo,id,sid);
   if(result.error){unplaced.push(id);continue;}

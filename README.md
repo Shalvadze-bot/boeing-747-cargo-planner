@@ -1,12 +1,12 @@
-# Boeing 747-400F Cargo Load Planner
+# Airbus A330-243F Cargo Load Planner
+
+Uçak görünümü, [Airbus A330-200F planlama şemasındaki](https://www.aircraft.airbus.com/sites/default/files/2025-12/AC_A330_20251201.pdf) 96 × 125 inç düzenini kullanır. Ana güvertede 18 yan yana ve 4 arka tekli, alt güvertede 4 ön ve 4 arka palet konumu gösterilir. LD3 düzeni bu görünümün kapsamı dışındadır. Koordinatlar, yükseklikler, ağırlık limitleri ve denge ölçüleri simülasyon içindir. Önceki tarayıcı planı ayrı saklanır ve yük listesi A330’a taşınır.
 
 Türkçe, görsel kargo yerleşim simülasyonu. Koyu arayüz, sarı vurgular ve sürükle bırak palet yerleştirme içerir.
 
 **SİMÜLASYON — Uçuş operasyonları için onaylı değildir. Gerçek yükleme için onaylı uçak ve operatör limitleri gerekir.** Uçak çizimi, pozisyonlar ve limitler örnektir; teknik yükleme planı olarak kullanılamaz.
 
-[Çalışan Sites uygulaması](https://cargo-planner-747-taha.jonahshalvadze.chatgpt.site) — mevcut paylaşım izinlerine göre ChatGPT ile giriş gerektirir.
-
-![Uygulama önizlemesi](docs/preview.png)
+[Çalışan Sites uygulaması](https://cargo-planner-design-three-preview.jonahshalvadze.chatgpt.site) — mevcut paylaşım izinlerine göre ChatGPT ile giriş gerektirir.
 
 ## Özellikler
 
@@ -88,7 +88,7 @@ Uçak geometrisi ilk Sites uygulamasının 2. sürümündeki `ThreeCargoDigitalT
 `PMC · 3D paletleme` sekmesi mevcut uçak yerleşiminden bağımsız hesaplanır. Uçak planı yalnızca **Uçak paletlerine ekle** işlemini onayladığınızda yeni kopyalarla genişletilir.
 
 - Fiziksel taban: 96 × 125 inç = 243,84 × 317,5 cm. Her kenardaki 8,5 cm boşluk çıkarıldığında net taban **226,84 × 300,5 cm** olur.
-- ZX-11 geometrisi kullanıcının sağladığı çizimden alınmıştır: 96 inç tepe, 39,5 inç düz üst bölüm, 56,5 inç eğim yatay açıklığı ve 41 inç alçak kenar. Kontur fiziksel plaka eksenindedir; iki yön için aynalanabilir. Bu veri sertifikalı Boeing veya operatör profili değildir.
+- ZX-11 geometrisi kullanıcının sağladığı çizimden alınmıştır: 96 inç tepe, 39,5 inç düz üst bölüm, 56,5 inç eğim yatay açıklığı ve 41 inç alçak kenar. Kontur fiziksel plaka eksenindedir; iki yön için aynalanabilir. Bu veri sertifikalı bir uçak veya operatör profili değildir.
 - Her yük satırında parça adı, uzunluk, genişlik, yükseklik, adet, isteğe bağlı birim ağırlık ve ayrı renk bulunur. `90° çevir` yalnızca tabandaki dönüşe izin verir; yük devrilmez. `Üstüne yük` o parçanın başka bir parçaya destek olmasına izin verir; ezilme dayanımı hesabı değildir.
 - Sezgisel arama üç farklı sıralamayı karşılaştırır. Normal istifler aynı yükseklikteki bir veya birden fazla istiflenebilir parçanın ortak üst yüzeyinde tam taban desteği ister. Yüzeyler arasındaki boşluklar, yükseklik farkları ve istif izni olmayan parçalar destek sayılmaz. Bu geometrik kontrol ezilme dayanımını veya yük taşıma kapasitesini doğrulamaz. JSON çıktısındaki `supportIds` tüm temas eden destekleri gösterir; `supportId` yalnızca tek destek olduğunda doludur. En iyi yerleşim veya minimum palet sayısı garanti edilmez.
 - Çoklu palet görünümü, tek palet yakın görünümü, kamera dönüşü/yakınlaştırma, katman kesiti, parça seçimi, koordinatlar ve JSON dışa aktarma vardır. Girdi değişince önceki plan işaretlenir, yeniden hesaplanmadan dışa aktarılamaz.

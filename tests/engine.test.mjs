@@ -7,3 +7,19 @@ test('rejects oversize lower deck and permits a compatible small cargo',()=>{ass
 test('optimizer preserves locks, rejects incompatible pallet, and meets all demo constraints',()=>{const r=optimize(initialCargo,initialPlan,['M07']);assert.ok(r.plan);assert.equal(r.plan.M07,'PAL-01');assert.deepEqual(violations(r.plan,initialCargo),[]);assert.equal(stats(r.plan,initialCargo).count,7);assert.equal(r.unplaced[0].id,'PAL-08');assert.equal(new Set(Object.values(r.plan)).size,Object.keys(r.plan).length);});
 test('total and zone constraints are enforced for dense plans',()=>{const cargo=slots.filter(s=>s.deck==='main').map((s,i)=>({id:'X'+i,weight:6000,l:200,w:200,h:200,priority:1}));const p=Object.fromEntries(cargo.map((c,i)=>[slots[i].id,c.id]));assert.ok(violations(p,cargo,false).some(s=>s.includes('Toplam')));assert.ok(violations(p,cargo,false).some(s=>s.includes('bölge')));});
 test('optimizer returns constraint-valid plans across different manifests',()=>{for(let k=1;k<=5;k++){const cargo=initialCargo.map((c,i)=>({...c,weight:600+((i*719+k*631)%6200)}));const r=optimize(cargo,{},[]);assert.ok(r.plan);assert.deepEqual(violations(r.plan,cargo),[]);assert.equal(new Set(Object.values(r.plan)).size,Object.keys(r.plan).length);}});
+
+test('A330 PMC layout has Airbus main-deck position labels and centerline aft holds',()=>{
+ const main=slots.filter(s=>s.deck==='main'), lower=slots.filter(s=>s.deck==='lower');
+ assert.deepEqual(main.slice(0,4).map(s=>s.label),['ABL','ABR','BCL','BCR']);
+ assert.equal(main.filter(s=>s.side!=null).length,18);
+ assert.deepEqual(main.filter(s=>s.side===null).map(s=>s.label),['PP','RR','SS','TT']);
+ assert.equal(lower.filter(s=>s.group==='forward').length,4);
+ assert.equal(lower.filter(s=>s.group==='aft').length,4);
+ assert.ok(lower[4].station-lower[3].station>12);
+ const testPmc={id:'PMC',l:317.5,w:243.84,h:100,weight:1500};
+ assert.ok(place({},[testPmc],testPmc.id,lower[0].id).plan);
+ const centerline=stats({[main.at(-1).id]:testPmc.id},[testPmc]);
+ assert.equal(centerline.left,750);
+ assert.equal(centerline.right,750);
+ assert.equal(centerline.side,0);
+});

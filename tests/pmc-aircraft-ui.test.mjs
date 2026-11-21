@@ -33,12 +33,12 @@ const change=async(node,value)=>act(async()=>{const setter=Object.getOwnProperty
 
 test('PMC import confirmation, cancellation, duplicate rejection and saved-plan reload',async()=>{
  await act(async()=>{root.render(React.createElement(App));await pause();});await act(pause);
- const original=JSON.parse(localStorage.getItem('cargo-demo-v1'));const pmcSaved=localStorage.getItem('cargo-pmc-v1');
+ const original=JSON.parse(localStorage.getItem('cargo-demo-a330-v1'));const pmcSaved=localStorage.getItem('cargo-pmc-v1');
  await click(button('PMC · 3D paletleme'));
  await click(button('Uçak paletlerine ekle'));
  assert.ok(document.querySelector('.pmc-transfer-dialog'));
  await click(button('Vazgeç'));assert.ok(!document.querySelector('.pmc-transfer-dialog'));
- assert.deepEqual(JSON.parse(localStorage.getItem('cargo-demo-v1')),original);
+ assert.deepEqual(JSON.parse(localStorage.getItem('cargo-demo-a330-v1')),original);
  await click(button('Uçak paletlerine ekle'));
  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
  assert.ok(!document.querySelector('.pmc-transfer-dialog'));
@@ -46,7 +46,7 @@ test('PMC import confirmation, cancellation, duplicate rejection and saved-plan 
  for(const input of document.querySelectorAll('.pmc-transfer-dialog input'))await change(input,String(Number(input.min)+100));
  await act(async()=>{document.querySelector('.pmc-transfer-dialog form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await pause();});
  assert.ok(!document.querySelector('.pmc-transfer-dialog'));assert.ok(document.querySelector('.aircraft-3d'));
- const imported=JSON.parse(localStorage.getItem('cargo-demo-v1'));
+ const imported=JSON.parse(localStorage.getItem('cargo-demo-a330-v1'));
  assert.ok(imported.cargo.length>original.cargo.length);assert.deepEqual(imported.cargo.slice(0,original.cargo.length),original.cargo);assert.equal(imported.plan.M07,original.plan.M07);assert.deepEqual(imported.locked,original.locked);assert.equal(localStorage.getItem('cargo-pmc-v1'),pmcSaved);
  // Touch swipes do not enter custom drag or capture the pointer.
  const card=document.querySelector('.cargo');let captures=0;card.setPointerCapture=()=>captures++;
@@ -56,10 +56,10 @@ test('PMC import confirmation, cancellation, duplicate rejection and saved-plan 
  for(const input of document.querySelectorAll('.pmc-transfer-dialog input'))await change(input,String(Number(input.min)+100));
  await act(async()=>document.querySelector('.pmc-transfer-dialog form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));
  assert.match(document.querySelector('.pmc-transfer-dialog [role=alert]').textContent,/zaten/);
- assert.deepEqual(JSON.parse(localStorage.getItem('cargo-demo-v1')),imported);
+ assert.deepEqual(JSON.parse(localStorage.getItem('cargo-demo-a330-v1')),imported);
  await click(button('Vazgeç'));
  await click(button('Yük ekle'));assert.equal(button('Uçak paletlerine ekle').disabled,true);
  await act(async()=>root.render(null));await act(async()=>{root.render(React.createElement(App));await pause();});
- assert.deepEqual(JSON.parse(localStorage.getItem('cargo-demo-v1')),imported);
+ assert.deepEqual(JSON.parse(localStorage.getItem('cargo-demo-a330-v1')),imported);
 });
 test.after(async()=>{await act(async()=>root.unmount());dom.window.close();await rm(output,{force:true});});

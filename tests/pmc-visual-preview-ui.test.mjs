@@ -26,7 +26,7 @@ test('visual-only dialog preserves saved weight, cargo, plan and locks through r
  try{
   const cargo=[...initialCargo,{id:'PAL-09',name:'PMC 01 · 1 parça',weight:120000,l:317.5,w:243.84,h:140,priority:1,pmc:{items:[{id:'box-1',l:100,w:80,h:140,x:8.5,y:8.5,z:0,color:'#ff0000'}]}}];
   const saved=JSON.stringify({cargo,plan:initialPlan,locked:['M07']});
-  localStorage.setItem('cargo-demo-v1',saved);
+  localStorage.setItem('cargo-demo-a330-v1',saved);
   await act(async()=>root.render(React.createElement(App)));
   const pmcSaved=localStorage.getItem('cargo-pmc-v1');
   await click([...document.querySelectorAll('.cargo')].find(n=>n.textContent.includes('PAL-09')));
@@ -38,7 +38,7 @@ test('visual-only dialog preserves saved weight, cargo, plan and locks through r
    assert.match(dialog.textContent,/120.000 kg/);
    assert.match(dialog.textContent,/AĞIRLIK DOĞRULANMADI/);
    assert.match(dialog.textContent,/Yükleme veya uçuş onayı değildir/);
-   assert.match(dialog.textContent,/M07; bu bir plan ataması değildir/);
+   assert.match(dialog.textContent,/EFL; bu bir plan ataması değildir/);
    const scene=dialog.querySelector('.aircraft-3d');
    assert.equal(scene.dataset.visualOnly,'true');
    assert.equal(scene.dataset.visibleCargo,'PAL-09');
@@ -54,17 +54,17 @@ test('visual-only dialog preserves saved weight, cargo, plan and locks through r
    assert.equal(dialog.querySelector('.aircraft-3d-positions'),null);
    assert.equal(button('Üstten görünümü aç',dialog),undefined);
    await click(button('Güverteleri ayır',dialog));
-   await click(button('Burun kapısı aç',dialog));
-   assert.equal(localStorage.getItem('cargo-demo-v1'),saved);
+   await click(button('Ana kargo kapısını aç',dialog));
+   assert.equal(localStorage.getItem('cargo-demo-a330-v1'),saved);
    assert.equal(localStorage.getItem('cargo-pmc-v1'),pmcSaved);
    if(n===0)await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
    else await click(button('Önizlemeyi kapat · plana dön',dialog));
    assert.equal(document.querySelector('[role="dialog"]'),null);
-   assert.equal(localStorage.getItem('cargo-demo-v1'),saved);
+   assert.equal(localStorage.getItem('cargo-demo-a330-v1'),saved);
   }
-  await click(button('M01 · Boş'));
+  await click(button('ABL · Boş'));
   assert.match(document.querySelector('.toast').textContent,/ağırlık|sınır/);
-  assert.equal(localStorage.getItem('cargo-demo-v1'),saved);
+  assert.equal(localStorage.getItem('cargo-demo-a330-v1'),saved);
   assert.match(document.querySelector('.summary').textContent,/8.000/);
   assert.match(document.querySelector('.selected-cargo').textContent,/Bekliyor/);
   // A pending optimizer result must never enter the isolated preview dialog.
@@ -75,7 +75,7 @@ test('visual-only dialog preserves saved weight, cargo, plan and locks through r
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,100));});
   assert.ok(document.querySelector('[aria-label="Yerleşim önerisi"]'));
   await click(document.querySelector('[aria-label="Kapat"]'));
-  assert.equal(localStorage.getItem('cargo-demo-v1'),saved);
+  assert.equal(localStorage.getItem('cargo-demo-a330-v1'),saved);
   await click(open());
   assert.equal(document.querySelector('.dialog .compare'),null);
   assert.equal(button('Öneriyi uygula',document.querySelector('.dialog')),undefined);
