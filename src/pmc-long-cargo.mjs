@@ -140,7 +140,9 @@ function prepareItem(row, number, config, warnings) {
   if (!choices) {
     choices = candidates.filter(candidate => requested==='auto' || candidate.alignment===requested).map(candidate => ({
       ...candidate,
-      fixedX:candidate.alignment==='front' || candidate.alignment==='rear',
+      // An oversized width must keep equal transverse overhangs in centered mode.
+      fixedX:candidate.alignment==='front' || candidate.alignment==='rear' ||
+        (requested==='center' && candidate.w>PMC.usableWidth),
       fixedY:candidate.alignment==='left' || candidate.alignment==='right' || requested==='center' || candidate.l>PMC.usableLength,
     }));
   }

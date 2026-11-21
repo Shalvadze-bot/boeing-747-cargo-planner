@@ -49,6 +49,19 @@ test('selected centered alignment preserves both longitudinal overhangs while sh
  assert.ok(result.placements.every(piece=>piece.overhang.front===41.25 && piece.overhang.rear===41.25));
 });
 
+test('centered repacking keeps three long pieces side by side even when rotation is allowed',()=>{
+ const rows=[80,80,65].map((width,i)=>({...row,id:`long-${i}`,width,height:60,allowRotation:true}));
+ for(const mirrored of [false,true]){
+  const result=runLongCargo(rows,{maxPallets:1,longCargoAlignment:'center',mirrored});
+  assert.equal(result.summary.physicalPmcCount,1);
+  assert.equal(result.summary.placedCount,3);
+  assert.equal(result.summary.positionCount,3);
+  const pieces=[...result.placements].sort((a,b)=>a.x-b.x);
+  assert.ok(pieces.every(piece=>!piece.rotated && piece.overhang.front===41.25 && piece.overhang.rear===41.25));
+  assert.ok(pieces.slice(1).every((piece,i)=>piece.x>=pieces[i].x+pieces[i].w-1e-6));
+ }
+});
+
 test('one shared group keeps both transverse and longitudinal overhang reservations',()=>{
  const result=runLongCargo([
   {...row,id:'wide',width:400,length:80,height:60},
