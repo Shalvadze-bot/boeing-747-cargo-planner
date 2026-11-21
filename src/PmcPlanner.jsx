@@ -36,6 +36,40 @@ function restore() {
   return { rows: freshRows(), config: { ...DEFAULT_CONFIG } };
 }
 
+function PmcProfile({ mirrored }) {
+  // In the nose-to-tail schematic, increasing pallet X points toward screen left.
+  const screenX = x => 255 - 210 * x / PMC.width;
+  const screenZ = z => 170 - 140 * z / PMC.maxHeight;
+  const high = screenX(mirrored ? PMC.width : 0);
+  const shoulder = screenX(mirrored ? PMC.width - PMC.shoulderX : PMC.shoulderX);
+  const low = screenX(mirrored ? 0 : PMC.width);
+  const top = screenZ(PMC.maxHeight);
+  const lowTop = screenZ(PMC.lowHeight);
+
+  return <figure className="pmc-profile-diagram">
+    <figcaption>Burundan kuyruğa bakış</figcaption>
+    <svg viewBox="0 0 300 209" role="img" aria-label="ZX-11 şematik palet kesiti">
+      <path className="pmc-profile-outline" d={`M${high} 170 V${top} H${shoulder} L${low} ${lowTop} V170 Z`}
+        fill="#283544" stroke="#8ca0b8" strokeWidth="1.5"/>
+      <g className="pmc-base-clearance" aria-label="8,5 cm kenar boşluğu yalnızca tabanda; yükseklikten çıkarılmaz">
+        <path d={`M${45+profileMargin} 170 H${255-profileMargin}`} fill="none" stroke="#ffbc24" strokeDasharray="4 4"/>
+        <path d={`M45 170 H${45+profileMargin} M${255-profileMargin} 170 H255`} fill="none" stroke="#ffbc24" strokeWidth="4"/>
+        <path d={`M${45+profileMargin} 165 V175 M${255-profileMargin} 165 V175`} fill="none" stroke="#ffbc24"/>
+      </g>
+      <path d="M45 185 H255" stroke="#5e7187"/>
+      <g fill="#c1cddd" fontSize="12" textAnchor="middle">
+        <text x="150" y="202">96″ / 243,84 cm</text>
+        <text x={(high+shoulder)/2} y="12" fontSize="10">39,5″ / 100,33 cm</text>
+        <text x={(shoulder+low)/2} y="47" fontSize="10">56,5″ / 143,51 cm</text>
+        <text transform={`translate(${high + (mirrored ? -13 : 13)} 100) rotate(-90)`} fontSize="10">96″ / 243,84 cm</text>
+        <text x={low} y={lowTop-19} fontSize="10" fill="#ffce64">41″ / 104,14 cm</text>
+        <text x="150" y="145" fill="#ffce64">ZX-11 referansı</text>
+      </g>
+    </svg>
+    <div className="pmc-profile-sides"><span>Uçağın sağı</span><span>Uçağın solu</span></div>
+  </figure>;
+}
+
 export default function PmcPlanner({onImportAircraft}) {
   const [transfer,setTransfer] = useState(null);
   const [transferError,setTransferError] = useState('');
@@ -163,11 +197,16 @@ export default function PmcPlanner({onImportAircraft}) {
     <div className="pmc-layout">
       <aside className="pmc-settings panel">
         <div className="panel-heading"><h2><Cube size={21}/> Palet profili</h2><span className="pmc-tag">PMC</span></div>
-        <div className="pmc-profile-diagram" aria-label="ZX-11 görselinden alınan örnek kontur"><svg viewBox="0 0 345 212" role="img"><title>ZX-11 kontur ölçüleri, operatör onayı bekliyor</title><path d="M45 170 V30 H132 L255 110 V170 Z" fill="#283544" stroke="#8ca0b8" strokeWidth="1.5"/><g className="pmc-base-clearance" aria-label="8,5 cm kenar boşluğu yalnızca tabanda; yükseklikten çıkarılmaz"><path d={`M${45+profileMargin} 170 H${255-profileMargin}`} fill="none" stroke="#ffbc24" strokeDasharray="4 4"/><path d={`M45 170 H${45+profileMargin} M${255-profileMargin} 170 H255`} fill="none" stroke="#ffbc24" strokeWidth="4"/><path d={`M${45+profileMargin} 165 V175 M${255-profileMargin} 165 V175`} fill="none" stroke="#ffbc24"/></g><path d="M45 185 H255 M29 30 V170" stroke="#5e7187"/><g fill="#c1cddd" fontSize="12" fontFamily="inherit"><text x="112" y="202">96″ / 243,84 cm</text><text x="64" y="11" fontSize="10">39,5″<tspan x="64" dy="12">100,33 cm</tspan></text><text x="178" y="23" fontSize="10">56,5″<tspan x="178" dy="12">143,51 cm</tspan></text><text x="5" y="102" fontSize="10" transform="rotate(-90 14 102)">96″ / 243,84 cm</text><text x="264" y="135" fontSize="10">41″<tspan x="264" dy="13">104,14 cm</tspan></text><text x="83" y="145" fill="#ffce64">ZX-11 referansı</text></g></svg></div>
+        <PmcProfile mirrored={config.mirrored}/>
         <div className="pmc-profile-fields">
-          <label>Kontur yönü<select value={config.mirrored ? 'left' : 'right'} onChange={e => updateConfig('mirrored', e.target.value === 'left')}><option value="right">Alçak kenar sağda</option><option value="left">Alçak kenar solda (ayna)</option></select></label>
+          <label>Kontur yönü · ekrana göre
+            <select aria-label="Kontur yönü" value={config.mirrored ? 'mirrored' : 'standard'} onChange={e => updateConfig('mirrored', e.target.value === 'mirrored')}>
+              <option value="standard">Alçak kenar solda</option>
+              <option value="mirrored">Alçak kenar sağda (ayna)</option>
+            </select>
+          </label>
           <label>En fazla palet<input aria-label="En fazla palet" type="number" min="1" max="20" step="1" value={config.maxPallets} onChange={e => updateConfig('maxPallets', e.target.value)}/></label>
-          <div className="pmc-source"><Info size={16}/><p><b>Kaynak: gönderdiğiniz ZX-11 çizimi.</b> En yüksek nokta 96″ / 243,84 cm; alçak kenar 41″ / 104,14 cm. 1 inç = 2,54 cm; ≈ işareti yuvarlanmış dönüşümü belirtir. Sarı işaret yalnızca taban kenar boşluğudur; yükseklikten 8,5 cm çıkarılmaz. Kontur fiziksel plaka ekseninde korunur. Uçak tipi / pozisyon uygunluğu doğrulanmadı.</p></div>
+          <div className="pmc-source"><Info size={16}/><p><b>Kaynak: gönderdiğiniz ZX-11 çizimi.</b> En yüksek nokta 96″ / 243,84 cm; alçak kenar 41″ / 104,14 cm. 1 inç = 2,54 cm; ≈ işareti yuvarlanmış dönüşümü belirtir. Sarı işaret yalnızca taban kenar boşluğudur; yükseklikten 8,5 cm çıkarılmaz. Sağ ve sol etiketleri şematik bakışı gösterir. Paletin gerçek uçak pozisyonu ve yönü henüz doğrulanmadı.</p></div>
           <div className="pmc-overhang"><label className="pmc-checkbox"><input type="checkbox" checked={!!config.longCargo} onChange={e => setConfig(previous=>({...previous,longCargo:e.target.checked,allowOverhang:false}))}/> Tek PMC üzerinde uzun yük · TEST</label>{config.longCargo && <><label>Yerleşim seçimi<select aria-label="Yerleşim seçimi" value={config.manualXAnchors && Object.keys(config.manualXAnchors).length?'manual':config.highEdgeAnchors && Object.keys(config.highEdgeAnchors).length?'high':config.longCargoAlignment||'auto'} onChange={e=>{let next;if(e.target.value==='high'){if(!result || stale || busy || !result.config?.longCargo || !result.placements?.length)return;const highEdgeAnchors=Object.fromEntries(result.placements.map(b=>[b.id,{y:b.localY,w:b.w,l:b.l,h:b.h,rotated:b.rotated}]));next={...config,highEdgeAnchors,manualXAnchors:null};}else{next={...config,longCargoAlignment:e.target.value,highEdgeAnchors:null,manualXAnchors:null};}setConfig(next);calculate(rows,next);}}><option value="manual" disabled>Elle yatay konum</option><option value="auto">En az şematik pozisyon</option><option value="center">Ortalı · iki yana taşma</option><option value="front">Ön uzun kenar · X=0</option><option value="rear">Arka uzun kenar · X=243,84</option><option value="left">Sol kısa kenar · Y=0</option><option value="right">Sağ kısa kenar · Y=317,5</option><option value="high" disabled={!result || stale || busy || !result.config?.longCargo || !result.placements?.length}>Yüksek kenara hizala</option></select></label><p>Yüksek kenar kontur yönüne göre seçilir; boyuna konum, taşma ve dönüş korunur. Hizalama 8,5 cm içerdedir.</p><p>Ön/arka: 317,5 cm uzun kenarlar. Sol/sağ: 243,84 cm kısa kenarlar. Seçim aynı 3D görünümü yeniden hesaplar; hizalanan kenarda 8,5 cm korunur. Her parça tek fiziksel PMC üzerinde, istifsiz test edilir. Komşu alanlarda plaka oluşturulmaz. Pozisyonlar eşit adımlı şemadır; kapı, kontur, destek, CG, limit ve bağlama bilgileri bekleniyor. Uçak planına aktarılmaz.</p></>}</div>
           {!config.longCargo && <details className="pmc-overhang"><summary>Komşu palete üst taşma</summary><p>Yalnızca bu senaryoda izin verilen değerleri girin. Operatör izni, taşıma ve bağlama yeterliliği bu araçla doğrulanmaz.</p><label className="pmc-checkbox"><input type="checkbox" checked={config.allowOverhang} onChange={e => updateConfig('allowOverhang', e.target.checked)}/> Üst taşma senaryosunu aç</label>{config.allowOverhang && <><label>İzin verilen en fazla taşma (cm)<input type="number" min="0.1" max="300.5" step="0.1" value={config.maxOverhangCm ?? ''} placeholder="Onaylı değeri girin" onChange={e => updateConfig('maxOverhangCm', e.target.value)}/></label><label>Taşmanın başlayabileceği yükseklik (cm)<input type="number" min="0.1" step="0.1" value={config.minOverhangHeightCm ?? ''} placeholder="Onaylı değeri girin" onChange={e => updateConfig('minOverhangHeightCm', e.target.value)}/></label><small className="pmc-caution">Komşu palet ayrılır, çakışma kontrol edilir. Destek ve ağırlık aktarımı ayrıca incelenmelidir.</small></>}</details>}
           <div className="pmc-method"><b>Geometrik yerleştirme</b><p>Varsayılan olarak girilen yükseklik dik korunur. Yalnızca izin verilen yüzeylere yatırılır; tabanda 90° döndürme ayrı bir izindir. İzinler güvenli taşıma veya dayanım onayı değildir. Normal istifler aynı yükseklikteki istiflenebilir kutuların ortak yüzeyinde tam taban desteği ister. Ağırlık, CG, zemin basıncı, ezilme ve bağlama limitleri hesaplanmaz.</p></div>

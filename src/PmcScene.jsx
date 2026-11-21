@@ -5,6 +5,7 @@ import {contourHeight} from './pmc-engine.mjs';
 
 const W = 243.84, L = 317.5, H = 243.84, M = 8.5;
 const ISO = { yaw: -0.66, pitch: 0.48 };
+const NOSE_TO_TAIL = { yaw: Math.PI, pitch: 0.001 };
 const fmt = n => Number(n).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
 const point = (x, y, z = 0) => [x, y, z];
 const average = points => points.reduce((a, p) => a.map((v, i) => v + p[i] / points.length), [0, 0, 0]);
@@ -80,7 +81,7 @@ export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1
   return <section className="pmc-scene" aria-label="Üç boyutlu PMC yük yerleşimi">
     <div className="pmc-scene-toolbar"><div className="pmc-scene-view-buttons" role="group" aria-label="Kamera görünümü">
       <button type="button" onClick={reset} title="İzometrik görünüm">İzometrik</button>
-      <button type="button" onClick={()=>{setCamera({yaw:0,pitch:.001});setZoom(1);}}>Ön</button>
+      <button type="button" aria-pressed={camera === NOSE_TO_TAIL} onClick={()=>{setCamera(NOSE_TO_TAIL);setZoom(1);}}>Burundan kuyruğa</button>
       <button type="button" onClick={()=>{setCamera({yaw:0,pitch:Math.PI/2-.001});setZoom(1);}}>Üst</button>
     </div><div className="pmc-scene-zoom" role="group" aria-label="Yakınlaştırma">
       <button type="button" aria-label="Uzaklaştır" onClick={()=>setZoom(z=>Math.max(.55,z-.15))}>−</button><span>{Math.round(zoom*100)}%</span><button type="button" aria-label="Yakınlaştır" onClick={()=>setZoom(z=>Math.min(2.5,z+.15))}>+</button><button type="button" aria-label="Kamerayı sıfırla" title="Kamerayı sıfırla" onClick={reset}>↺</button>
@@ -93,7 +94,7 @@ export default function PmcScene({ onMoveCargo, placements = [], palletCount = 1
           {!validPosition && <p role="alert">Mevcut konum şematik kontur/taban sınırı dışında. Kontrolü kullanarak geçerli aralığa taşıyın.</p>}
           <label>Yatay X (cm)<input aria-label="Yatay X (cm)" type="number" step="0.1" min={limits.min} max={limits.max} value={xDraft} onChange={e=>setXDraft(e.target.value)} onBlur={commitX} onKeyDown={e=>{if(e.key==='Enter'){commitX();e.currentTarget.blur();}if(e.key==='Escape')setXDraft(String(Number(selected.x.toFixed(2))));}}/></label>
           <input aria-label="Yükü yatay taşı" type="range" step="0.01" min={limits.min} max={limits.max} value={Math.max(limits.min,Math.min(limits.max,selected.x))} onChange={e=>moveTo(Number(e.target.value))}/>
-          <p>Hareket: {units(selected.x-(moveOrigins.current[selected.id]??selected.x))} · Pozitif X fiziksel sağa</p>
+          <p>Hareket: {units(selected.x-(moveOrigins.current[selected.id]??selected.x))} · Pozitif X, X=243,84 cm kenarına doğru</p>
           <p>Yüksek kenara kalan hareket: {validPosition?units(mirrorContour?limits.max-selected.x:selected.x-limits.min):'geçersiz konum'} · Alçak kenara kalan hareket: {validPosition?units(mirrorContour?selected.x-limits.min:limits.max-selected.x):'geçersiz konum'}</p>
           <p>Tabanda X=0 boşluğu: {units(selected.x)} · X=243,84 boşluğu: {units(W-selected.x-selected.w)}</p>
           <p>Üstte en az dikey kontur boşluğu: {units(Math.min(contourHeight(selected.x,mirrorContour),contourHeight(selected.x+selected.w,mirrorContour))-selected.z-selected.h)}</p>

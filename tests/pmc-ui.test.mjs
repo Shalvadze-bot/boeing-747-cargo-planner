@@ -36,7 +36,25 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  const diagram=document.querySelector('.pmc-profile-diagram');
  for(const measure of ['96″ / 243,84 cm','39,5″','100,33 cm','56,5″','143,51 cm','41″','104,14 cm'])assert.ok(diagram.textContent.includes(measure),measure);
  // Display-only labels preserve the physical contour; clearance is drawn only at the base.
- assert.equal(diagram.querySelectorAll('path')[0].getAttribute('d'),'M45 170 V30 H132 L255 110 V170 Z');
+ assert.equal(diagram.querySelector('figcaption').textContent,'Burundan kuyruğa bakış');
+ assert.deepEqual([...diagram.querySelectorAll('.pmc-profile-sides span')].map(n=>n.textContent),['Uçağın sağı','Uçağın solu']);
+ const profileLowX=()=>Number([...diagram.querySelectorAll('svg text')].find(n=>n.textContent==='41″ / 104,14 cm').getAttribute('x'));
+ const sceneLowX=()=>Number(document.querySelector('[data-dimension="dim-low"] line').getAttribute('x1'));
+ const contourSelect=field('Kontur yönü');
+ const initialSavedPlan=localStorage.getItem('cargo-pmc-v1');
+ assert.match(contourSelect.selectedOptions[0].textContent,/solda/);
+ assert.equal(profileLowX(),45);
+ await click(button('Burundan kuyruğa'));
+ assert.ok(sceneLowX()<450);
+ assert.equal(localStorage.getItem('cargo-pmc-v1'),initialSavedPlan);
+ await change(contourSelect,'mirrored');
+ assert.match(contourSelect.selectedOptions[0].textContent,/sağda/);
+ assert.equal(profileLowX(),255);
+ await click(button('Paletlere yerleştir'));
+ assert.ok(sceneLowX()>450);
+ await change(contourSelect,'standard');
+ await click(button('Paletlere yerleştir'));
+ await click(button('İzometrik'));
  assert.ok(diagram.querySelector('.pmc-base-clearance'));
  assert.match(diagram.querySelector('.pmc-base-clearance').getAttribute('aria-label'),/yalnızca tabanda; yükseklikten çıkarılmaz/);
  assert.equal(diagram.querySelector('.pmc-base-clearance path').getAttribute('d'),`M${45+210*8.5/243.84} 170 H${255-210*8.5/243.84}`);
@@ -82,7 +100,7 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  assert.equal(document.querySelector('.pmc-errors'),null);
  await click(button('Tüm paletler'));
  assert.match(document.querySelector('.pmc-scene-badge').textContent,/TÜM PALETLER/);
- await click(button('Üst'));await click(button('Ön'));await click(button('İzometrik'));
+ await click(button('Üst'));await click(button('Burundan kuyruğa'));await click(button('İzometrik'));
  const selectable=document.querySelector('.pmc-scene-item-label');
  await act(async()=>{selectable.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));});
  assert.ok(document.querySelector('.pmc-scene-selection'));
