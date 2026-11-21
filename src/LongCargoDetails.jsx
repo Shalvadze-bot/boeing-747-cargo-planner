@@ -25,6 +25,15 @@ function PieceDetails({piece}) {
   </section>;
 }
 
+function BalanceResult({balance}) {
+  if (!balance?.cg) return <p>Geometrik yerleşim · Ağırlık dengesi doğrulanmadı.</p>;
+  return <p>
+    <b>Tahmini ağırlık merkezi</b> · X {format(balance.cg.x)} cm · Y {format(balance.cg.y)} cm ·
+    {' '}Z {format(balance.cg.z)} cm · Brüt {format(balance.gross)} kg.
+    {' '}{balance.status==='within' ? 'Tahmin, girilen sınırlar içinde.' : 'Ağırlık dengesi doğrulanmadı.'}
+  </p>;
+}
+
 export default function LongCargoDetails({pallets}) {
   return <section className="pmc-long-details">
     <h3>Şematik uçak pozisyonları</h3>
@@ -32,6 +41,7 @@ export default function LongCargoDetails({pallets}) {
     {pallets.map(pallet=><article key={pallet.index}>
       <h4>PMC {String(pallet.index+1).padStart(2,'0')}</h4>
       <p><b>1 fiziksel PMC</b> · <b>{pallet.items.length} parça</b> · <b>{pallet.positionCount} şematik pozisyon</b></p>
+      <BalanceResult balance={pallet.balance}/>
       <div className="pmc-slot-scroll">
         <div className="pmc-slot-map" style={{gridTemplateColumns:`repeat(${new Set(pallet.positions.map(position=>position.x)).size}, minmax(90px, 1fr))`}}>
           {pallet.positions.map(position=><div key={position.id} className={position.support?'support':'blocked'}>

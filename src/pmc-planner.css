@@ -29,3 +29,12 @@
     scrollbar-width: thin;
   }
 }
+
+.pmc-balance-settings{padding:14px 18px}
+.pmc-balance-settings summary{color:#f4c86b;font-weight:650;cursor:pointer}
+.pmc-balance-settings p{color:#b5c4d6;font-size:13px;line-height:1.5;margin:10px 0}
+.pmc-balance-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:12px}
+.pmc-balance-groups fieldset{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:10px;min-width:0;border:1px solid #34465f;border-radius:8px;padding:11px}
+.pmc-balance-groups legend{padding:0 5px;color:#d9e3ef;font-size:13px}
+.pmc-balance-groups label{display:grid;gap:5px;color:#c5d0de;font-size:13px}
+.pmc-balance-groups input{width:100%;min-width:0}

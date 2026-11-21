@@ -179,6 +179,24 @@ test('the long cargo screen displays a supported upper layer and locks manual mo
  assert.equal(field('Yatay X (cm)'),null);
 });
 
+test('long mode calculates balance after the pallet settings are entered',async()=>{
+ const rows=[{id:'weight-test',name:'Yük',length:400,width:80,height:60,quantity:1,weight:200,allowRotation:false,stackable:true}];
+ localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows,config:{maxPallets:1,longCargo:true,longCargoAlignment:'center'}}));
+ await act(async()=>root.render(React.createElement(PmcPlanner,{key:'pmc-balance-ui'})));
+ await act(pause);
+ assert.match(document.querySelector('.pmc-long-details').textContent,/Ağırlık dengesi doğrulanmadı/);
+ for(const [label,value] of [['Palet ağırlığı (kg)','100'],['Palet merkezi X (cm)','121.92'],
+  ['Palet merkezi Y (cm)','158.75'],['Palet merkezi Z (cm)','-2'],
+  ['En küçük X (cm)','120'],['En büyük X (cm)','125'],
+  ['En küçük Y (cm)','157'],['En büyük Y (cm)','161']]){
+  await change(field(label),value);
+ }
+ await click(button('Paletlere yerleştir'));
+ assert.match(document.querySelector('.pmc-long-details').textContent,/Tahmini ağırlık merkezi/);
+ assert.match(document.querySelector('.pmc-long-details').textContent,/Brüt 300 kg/);
+ assert.match(document.querySelector('.pmc-long-details').textContent,/girilen sınırlar içinde/);
+});
+
 test('saved long-edge placement stays intact until a new alignment is selected',async()=>{
  const rows=[{id:'long',name:'Long',length:400,width:88,height:60,quantity:1,weight:25,allowRotation:false,stackable:false}];
  for (const alignment of ['front','rear']) {

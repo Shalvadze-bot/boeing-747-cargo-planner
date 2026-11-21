@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, SAMPLE_CARGO, PMC, contourHeight } from './pmc-engine.m
 import PmcScene from './PmcScene';
 import {runLongCargo} from './pmc-long-cargo.mjs';
 import LongCargoDetails from './LongCargoDetails';
+import PmcLongBalanceSettings from './PmcLongBalanceSettings';
 import {preparePmcTransfer} from './pmc-aircraft.mjs';
 import CargoImport from './CargoImport';
 import './pmc-planner.css';
@@ -261,6 +262,8 @@ export default function PmcPlanner({onImportAircraft}) {
           {!rows.length && <p className="pmc-empty-input">Başlamak için bir yük ekleyin.</p>}
           <div className="pmc-input-footer"><span><b>{rows.length}</b> yük grubu · <b>{format(totalRequested, 0)}</b> parça<small>{saved ? 'Girdiler bu tarayıcıda kaydedilir.' : 'Tarayıcı kaydı kullanılamıyor.'}</small></span><div>{busy && <button onClick={stop}>İptal</button>}{placeButton}</div></div>
         </section>
+        {config.longCargo && <PmcLongBalanceSettings profile={config.pmcBalance}
+          onChange={(key,value)=>setConfig(previous=>({...previous,pmcBalance:{...previous.pmcBalance,[key]:value}}))}/>}
         <details className="panel pmc-import-panel"><summary>Fotoğraf veya PDF’den yük listesi aktar</summary><CargoImport onImport={importRows}/></details>
         {(error || result?.errors?.length > 0) && <div className="pmc-errors" role="alert"><Warning size={21}/><div>{error && <p>{error}</p>}{result?.errors?.map((item, i) => <p key={i}>{typeof item === 'string' ? item : item.message || JSON.stringify(item)}</p>)}</div></div>}
         <section className="pmc-output panel" aria-busy={busy}>
