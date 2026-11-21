@@ -21,7 +21,7 @@
 .pmc-profile-sides{display:flex;justify-content:space-between;gap:8px;padding:0 12px;font-size:12px;font-weight:600;color:#c1cddd}
 
 @media (min-width: 801px) {
-  .pmc-settings {
+  .pmc-layout > .pmc-settings {
     position: sticky;
     top: 16px;
     max-height: calc(100dvh - 32px);
