@@ -241,7 +241,7 @@ export default function PmcPlanner({onImportAircraft}) {
               }}>
                 {isPreviousAlignment && <option value={selectedAlignment} disabled hidden>Önceki yerleşim</option>}
                 <option value="manual" disabled>Elle yatay konum</option>
-                <option value="auto">En az şematik pozisyon</option>
+                <option value="auto">Otomatik · En çok parça</option>
                 <option value="center">Ortalı · iki yana taşma</option>
                 <option value="left">Sol kısa kenar · Y=0</option>
                 <option value="right">Sağ kısa kenar · Y=317,5</option>

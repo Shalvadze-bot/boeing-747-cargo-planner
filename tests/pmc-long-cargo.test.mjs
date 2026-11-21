@@ -122,3 +122,29 @@ test('stacking cannot exceed the contour or extend beyond a supporting piece',()
   assert.equal(result.unplaced[0].id,'upper:1');
  }
 });
+
+test('comparing complete transverse layouts keeps all five pieces on the same PMC',()=>{
+ const rows=[...stackingRows.map((piece,i)=>({...piece,stackable:i!==3})),
+  {...stackingRows[0],id:'stack-4',height:60}];
+ for(const mirrored of [false,true]) for(const alignment of ['auto','center']){
+  const result=runLongCargo(rows,{mirrored,longCargoAlignment:alignment,maxPallets:1});
+  assert.equal(result.summary.placedCount,5);
+  assert.equal(result.summary.physicalPmcCount,1);
+  const green=result.placements.find(piece=>piece.rowId==='stack-3');
+  const pink=result.placements.find(piece=>piece.rowId==='stack-4');
+  assert.equal(green.z,60);
+  assert.equal(pink.z,60);
+  assert.notEqual(green.supportId,pink.supportId);
+  assert.equal(result.summary.positionCount,alignment==='center'?3:2);
+  if(alignment==='center') assert.ok(result.placements.every(piece=>piece.overhang.front===41.25 && piece.overhang.rear===41.25));
+ }
+});
+
+test('a layout starting on the opposite side wins when it places more pieces',()=>{
+ const rows=[[70,110],[45,90],[95,110],[80,90]].map(([width,height],i)=>
+  ({...row,id:'part-'+i,width,height,stackable:true}));
+ const result=runLongCargo(rows,{maxPallets:1,longCargoAlignment:'center'});
+ assert.equal(result.summary.placedCount,4);
+ assert.ok(result.placements[0].x>100);
+ assert.ok(result.placements.every(piece=>piece.overhang.front===41.25 && piece.overhang.rear===41.25));
+});
