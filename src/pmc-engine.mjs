@@ -85,7 +85,7 @@ function* candidatePoints(grids,z){
   for(const x of xs)for(const g of active)if(g.xs.has(x))yield {x,y,z,w:g.w,l:g.l,h:g.h,face:g.face};
  }
 }
-function pack(items,c){
+function pack(items,c,orientationPreference='default'){
  const placements=[],unplaced=[];let allocated=0;
  for(const item of items){
  let chosen=null;
@@ -103,7 +103,9 @@ function pack(items,c){
    const edges=local.filter(b=>Math.abs(b.z+b.h-z)<=EPS||(b.z<z+maxH-EPS&&b.z+b.h>z+EPS));
    const rowBlockers=new Map(),rowSupports=new Map();
    const grids=[];
-   for(const [w,l,h,face] of orientations(item)){
+   const variants=orientations(item);
+   if(orientationPreference==='rotated-first') variants.sort((a,b)=>Number(Math.abs(b[0]-item.width)>EPS)-Number(Math.abs(a[0]-item.width)>EPS));
+   for(const [w,l,h,face] of variants){
     const xs=unique([PMC.margin,PMC.width-PMC.margin-w,...edges.flatMap(b=>z===0?[b.x+b.w,b.x-w]:[b.x,b.x+b.w-w,b.x+b.w,b.x-w])])
      .filter(x=>between(PMC.margin,x)&&between(x+w,PMC.width-PMC.margin));
     const ys=unique([start,end-l,...edges.flatMap(b=>z===0?[b.y+b.l,b.y-l]:[b.y,b.y+b.l-l,b.y+b.l,b.y-l])])
@@ -162,7 +164,12 @@ export function runPacking(inputRows,config={}){
  const items=rows.flatMap(r=>Array.from({length:r.quantity},(_,i)=>({...r,orientationMode:r.pieceOrientations?.[i+1]??r.orientationMode??'upright',instanceId:`${r.id}:${i+1}`})));
  const orders=[(a,b)=>b.length*b.width*b.height-a.length*a.width*a.height,(a,b)=>b.height-a.height||b.width*b.length-a.width*a.length,(a,b)=>b.width*b.length-a.width*a.length||b.height-a.height];
  let best=null;
- for(const sort of orders){const run=pack([...items].sort(sort),c);if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;}
+ // Explore both legal horizontal orientation preferences for each cargo order.
+ // A first-fit orientation can waste a pallet even when a rotated layout fits.
+ for(const sort of orders)for(const preference of ['default','rotated-first']){
+  const run=pack([...items].sort(sort),c,preference);
+  if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;
+ }
  const {placements,unplaced,allocated}=best;result.placements=placements;result.unplaced=unplaced;
  result.pallets=Array.from({length:allocated},(_,index)=>{const parts=placements.filter(b=>b.touchedPallets.includes(index));return {index,items:parts,metrics:{itemCount:parts.length,originatingCount:parts.filter(b=>b.palletIndex===index).length,maxHeight:Math.max(0,...parts.map(b=>b.z+b.h)),volumeM3:parts.reduce((s,b)=>s+b.w*b.h*Math.max(0,Math.min(b.y+b.l,(index+1)*PMC.length)-Math.max(b.y,index*PMC.length))/1e6,0),reviewRequired:parts.some(b=>b.reviewRequired)}};});
  result.summary={requestedCount:items.length,placedCount:placements.length,unplacedCount:unplaced.length,palletCount:allocated,volumeM3:placements.reduce((s,b)=>s+b.w*b.l*b.h/1e6,0),knownWeightKg:placements.reduce((s,b)=>s+(b.weight??0),0),unknownWeightCount:placements.filter(b=>b.weight===null).length,overhangCount:placements.filter(b=>b.reviewRequired).length};
