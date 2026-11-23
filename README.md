@@ -6,7 +6,7 @@ Türkçe, görsel kargo yerleşim simülasyonu. Koyu arayüz, sarı vurgular ve 
 
 **SİMÜLASYON — Uçuş operasyonları için onaylı değildir. Gerçek yükleme için onaylı uçak ve operatör limitleri gerekir.** Uçak çizimi, pozisyonlar ve limitler örnektir; teknik yükleme planı olarak kullanılamaz.
 
-[Çalışan Sites uygulaması](https://cargo-planner-design-three-preview.jonahshalvadze.chatgpt.site) — mevcut paylaşım izinlerine göre ChatGPT ile giriş gerektirir.
+[Kargo Planlayıcı](https://shalvadze-bot.github.io/boeing-747-cargo-planner/) — ChatGPT Sites’a yönlendirir. Site erişimi mevcut paylaşım izinlerine tabidir.
 
 ## Özellikler
 
@@ -65,9 +65,7 @@ GitHub'a yapılan değişiklikler Sites uygulamasını otomatik yayımlamaz. Bu 
 
 ## GitHub Pages
 
-[GitHub Pages uygulaması](https://shalvadze-bot.github.io/boeing-747-cargo-planner/)
-
-`main` dalına gönderilen değişiklikler `.github/workflows/pages.yml` ile test edilir, derlenir ve yalnızca `dist/client` çıktısı GitHub Pages’e yayımlanır. Depoda Settings → Pages → Source seçeneği **GitHub Actions** olmalıdır. Kaynak `index.html` dosyasını doğrudan yayımlamayın; tarayıcı JSX geliştirme dosyalarını çalıştıramaz.
+GitHub Pages mevcut planlayıcı bağlantısını ChatGPT Sites’a yönlendirir. `main` dalındaki `.github/workflows/pages.yml` iş akışı uygulamayı derleyip test eder ve `github-pages/` klasöründeki yönlendirme sayfasını yayımlar. Depoda Settings → Pages → Source seçeneği **GitHub Actions** olmalıdır.
 
 Pages derlemesini yerelde kontrol etmek için:
 
