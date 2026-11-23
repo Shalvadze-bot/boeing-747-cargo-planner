@@ -70,7 +70,7 @@ function PmcProfile({ mirrored }) {
   </figure>;
 }
 
-export default function PmcPlanner({onImportAircraft, viewOnly = false, activityPanel}) {
+export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBacked = false, activityPanel}) {
   const [transfer,setTransfer] = useState(null);
   const [transferError,setTransferError] = useState('');
   const [initial] = useState(restore);
@@ -111,10 +111,10 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, activity
   const utilization = palletCount ? clippedVolume / (envelopeArea * PMC.usableLength * palletCount) * 100 : 0;
 
   useEffect(() => {
-    if (viewOnly || (rows === initial.rows && config === initial.config)) return;
+    if (viewOnly || (cloudBacked && rows === initial.rows && config === initial.config)) return;
     try { localStorage.setItem(STORE, JSON.stringify({ version: 1, rows, config })); setSaved(true); window.dispatchEvent(new Event('cargo:local-plan-change')); }
     catch { setSaved(false); }
-  }, [rows, config, initial, viewOnly]);
+  }, [rows, config, initial, viewOnly, cloudBacked]);
   useEffect(() => {
     calculate(initial.rows, initial.config);
     return () => { worker.current?.terminate(); clearTimeout(timeout.current); };
