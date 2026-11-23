@@ -147,3 +147,12 @@ test('100 mixed rows / 200 small pieces return before the UI worker timeout',()=
  assert.equal(child.status,0,child.stderr);
  const summary=JSON.parse(child.stdout);assert.equal(summary.placedCount,200);assert.equal(summary.unplacedCount,0);
 });
+
+
+test('rotated-first search fits four identical boxes on one PMC',()=>{
+ const cargo=[row({id:'rotation-regression',width:150,length:100,height:100,quantity:4,stackable:false,allowRotation:true})];
+ const result=runPacking(cargo,{maxPallets:1});
+ invariant(result);
+ assert.equal(result.summary.placedCount,4);
+ assert.equal(result.summary.palletCount,1);
+});
