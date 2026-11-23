@@ -11,3 +11,6 @@ coverage/
 
 # Reproducibly staged by predev/prebuild
 public/ocr/
+
+# Local Supabase CLI state
+supabase/.temp/

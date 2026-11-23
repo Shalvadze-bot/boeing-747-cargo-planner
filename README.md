@@ -16,7 +16,8 @@ Türkçe, görsel kargo yerleşim simülasyonu. Koyu arayüz, sarı vurgular ve 
 - Örnek boyuna denge ve sol–sağ yük farkı kontrolleri.
 - Palet sabitleme; sabitlenen yükleri koruyan otomatik öneri.
 - Mevcut ve önerilen planı karşılaştırma; yerleşemeyen paletlerin nedenlerini gösterme.
-- Tarayıcıda yerel kayıt, JSON indirme ve örnek planı sıfırlama.
+- Site açıldığında ChatGPT oturumuyla yüklenen Projelerim ekranı. Proje oluşturma, açma, yeniden adlandırma ve silme.
+- Farklı cihazlarda açılabilen bulut kaydı, çakışma uyarısı, JSON indirme ve örnek planı sıfırlama.
 - Küçük ekranlar için dokunulabilir pozisyon listesi.
 
 Öneri motoru sınırlı genişlikte sezgisel arama kullanır; matematiksel olarak en iyi çözüm garantisi vermez. Uçak boş ağırlığı, yakıt, gerçek ağırlık merkezi zarfı, zemin/bağlama limitleri, tehlikeli maddeler ve operasyonel yükleme sırası modellenmez.
@@ -30,7 +31,9 @@ npm ci
 npm run dev
 ```
 
-Terminalde gösterilen yerel adresi açın. Veriler aynı tarayıcının `localStorage` alanında saklanır; ekip üyeleri arasında canlı senkronizasyon yoktur.
+Terminalde gösterilen yerel adresi açın. Bulut proje akışı, ChatGPT oturum kimliğini Sites worker üzerinden aldığı için yayımlanan Sites ortamında çalışır.
+
+Sites worker, Supabase `cargo-sites` fonksiyonuna bağlanır. Worker ortamında `.env.example` dosyasındaki değişkenleri ayarlayın. `CARGO_WORKER_TOKEN` değerinin SHA-256 özeti, Supabase geçişi uygulandıktan sonra `cargo_sites_private.worker_credential` tablosuna kaydedilir. Fonksiyon, Supabase'in sunucu tarafındaki kimlik bilgilerini kullanır.
 
 ## Derleme ve kontroller
 
