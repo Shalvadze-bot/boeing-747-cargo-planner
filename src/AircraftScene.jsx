@@ -20,10 +20,10 @@ function disposeTree(root) {
   geometries.forEach(g=>g.dispose()); materials.forEach(m=>m.dispose());
 }
 
-export default function AircraftScene({cargo, plan, locked, selected, deck, onSelect, onPlace, onTopView, readOnly=false}) {
+export default function AircraftScene({cargo, plan, locked, selected, deck, focusedSlot, onSelect, onPlace, onPosition, onTopView, readOnly=false}) {
   const mount = useRef(null), wrapper = useRef(null), api = useRef(null);
   const latest = useRef(null);
-  latest.current = {cargo, plan, locked, selected, deck, onSelect, onPlace, readOnly};
+  latest.current = {cargo, plan, locked, selected, deck, focusedSlot, onSelect, onPlace, onPosition, readOnly};
   const [error,setError] = useState(''), [retry,setRetry] = useState(0), [shell,setShell] = useState('cutaway');
   const [separated,setSeparated] = useState(false), [doorOpen,setDoorOpen] = useState(false), [full,setFull] = useState(false);
   const [hover,setHover] = useState(''), [fullscreenNotice,setFullscreenNotice] = useState('');
@@ -84,7 +84,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
           const x=slot.station,z=slot.lateral,y=DECK_HEIGHT[slot.deck];
           const length=slot.l/100,width=slot.w/100;
           const item=state.cargo.find(c=>c.id===state.plan[slot.id]);
-          const chosen=!!item&&item.id===state.selected;
+          const chosen=(!!item&&item.id===state.selected)||slot.id===state.focusedSlot;
           const active=slot.deck===state.deck;
           const color=chosen?0xfacc15:state.locked.includes(slot.id)?0xa78bfa:item?0x38bdf8:0x64748b;
           const bay=new THREE.Mesh(new THREE.BoxGeometry(length,.08,width),new THREE.MeshBasicMaterial({color,transparent:true,opacity:active?.36:.12}));
@@ -118,7 +118,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
       listen(canvas,'pointermove',e=>{if(gesture&&Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)>5)gesture.moved=true;if(!pointers.size)setHover(latest.current.readOnly?'':slotLabel(pick(e))||'');});
       listen(window,'pointerup',e=>{
         const g=gesture; pointers.delete(e.pointerId);
-        if(g?.id===e.pointerId){gesture=null;if(!g.moved&&e.target===canvas){const sid=pick(e);if(sid){const s=latest.current;if(s.readOnly)return;const id=s.plan[sid];if(id)s.onSelect(id);else s.onPlace(s.selected,sid);}}}
+        if(g?.id===e.pointerId){gesture=null;if(!g.moved&&e.target===canvas){const sid=pick(e);if(sid){const s=latest.current;if(s.readOnly)return;if(s.onPosition){s.onPosition(sid);return;}const id=s.plan[sid];if(id)s.onSelect(id);else s.onPlace(s.selected,sid);}}}
       });
       listen(window,'pointercancel',e=>{pointers.delete(e.pointerId);gesture=null;});
       listen(canvas,'pointerleave',()=>setHover(''));
@@ -152,7 +152,7 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
       if(renderer){renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
     };
   },[retry]);
-  useEffect(()=>{api.current?.refresh();},[cargo,plan,locked,selected,deck]);
+  useEffect(()=>{api.current?.refresh();},[cargo,plan,locked,selected,deck,focusedSlot]);
   async function fullscreen(){setFullscreenNotice('');try{if(document.fullscreenElement===wrapper.current)await document.exitFullscreen();else await wrapper.current.requestFullscreen();}catch{setFullscreenNotice('Tam ekran açılamadı. 3D görünümü normal boyutta kullanabilirsiniz.');}}
   return <section ref={wrapper} className="aircraft-3d" data-visual-only={readOnly?'true':undefined} data-visible-cargo={cargo.filter(item=>Object.values(plan).includes(item.id)).map(item=>item.id).join(',')} aria-label={readOnly?'Seçili PMC görsel önizlemesi':'3D uçak görünümü'}>
     <div className="aircraft-3d-tools" aria-label="3D görünüm araçları">
@@ -166,6 +166,6 @@ export default function AircraftScene({cargo, plan, locked, selected, deck, onSe
     {readOnly?<div className="aircraft-3d-warning visual-preview-warning" role="note"><strong>YALNIZCA GÖRSEL ÖNİZLEME · AĞIRLIK DOĞRULANMADI</strong><span>Yükleme veya uçuş onayı değildir. Ölçü, ağırlık, denge ve operasyonel uygunluk kontrolü yapılmaz. Konumlar ve yük boyutları şematiktir.</span><span>Kaydedilmiş ağırlık: {cargo.find(item=>item.id===selected)?.weight?.toLocaleString('tr-TR')} kg · Değiştirilmedi, gerçek ağırlık olarak doğrulanmadı.</span><span>Bu görünüm kaydedilmiş planı, yerleşimi ve plan çıktısını değiştirmez.</span></div>:<div className="aircraft-3d-warning">SİMÜLASYON · Uçuş operasyonları için onaylı değildir. Konumlar ve yük boyutları şematiktir.</div>}
     <div className="aircraft-3d-viewport"><div ref={mount} className="aircraft-3d-canvas"/>{error&&<div className="aircraft-3d-fallback" role="status"><p>{error}</p><button onClick={()=>setRetry(n=>n+1)}>3D yeniden dene</button>{!readOnly&&<button onClick={onTopView}>Üstten görünümü aç</button>}</div>}</div>
     <p className="aircraft-3d-hint">Sürükle: döndür · Tekerlek / iki parmak: yakınlaştır · Sağ sürükle: kaydır. {readOnly?'Görsel önizleme: pozisyonlara tıklamak planı değiştirmez.':`${hover?hover+' · ':''}Seçili güvertedeki yüke tıklayın; boş pozisyona tıklayarak seçili paleti yerleştirin.`}</p>
-    {!readOnly&&<details className="aircraft-3d-positions"><summary>Klavye ile pozisyon seç / yerleştir · {deck==='main'?'Ana':'Alt'} güverte</summary><div>{slots.filter(s=>s.deck===deck).map(s=><button key={s.id} aria-pressed={!!plan[s.id]&&plan[s.id]===selected} onClick={()=>plan[s.id]?onSelect(plan[s.id]):onPlace(selected,s.id)}>{s.label} · {plan[s.id]||'Boş'}{locked.includes(s.id)?' · Sabit':''}</button>)}</div></details>}
+    {!readOnly&&<details className="aircraft-3d-positions"><summary>Klavye ile pozisyon seç / yerleştir · {deck==='main'?'Ana':'Alt'} güverte</summary><div>{slots.filter(s=>s.deck===deck).map(s=><button key={s.id} aria-pressed={!!plan[s.id]&&plan[s.id]===selected} onClick={()=>onPosition?onPosition(s.id):plan[s.id]?onSelect(plan[s.id]):onPlace(selected,s.id)}>{s.label} · {plan[s.id]||'Boş'}{locked.includes(s.id)?' · Sabit':''}</button>)}</div></details>}
   </section>;
 }

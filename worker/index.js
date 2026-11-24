@@ -1,3 +1,5 @@
+import { handleAi } from './ai-route.mjs';
+
 const projectsPath = "/api/projects";
 const maxBodyBytes = 2_000_000;
 
@@ -91,6 +93,16 @@ async function handleProjects(request, url, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/api/ai/')) {
+      return handleAi(request, env, { canEdit: async id => {
+        const projectUrl = new URL(projectsPath + '/' + id, url.origin);
+        const probe = new Request(projectUrl, { headers: request.headers });
+        const result = await handleProjects(probe, projectUrl, env);
+        if (result.status === 404 || result.status === 403) return false;
+        if (!result.ok) throw new Error('Project access could not be verified');
+        return (await result.json()).can_edit === true;
+      } });
+    }
     if (url.pathname === projectsPath || url.pathname.startsWith(`${projectsPath}/`)) {
       return handleProjects(request, url, env);
     }

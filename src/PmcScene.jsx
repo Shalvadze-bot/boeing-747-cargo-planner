@@ -24,7 +24,7 @@ function cuboid(x, y, z, w, l, h) {
   ];
 }
 
-export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
+export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, onSelectPallet, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
   const [moveMode,setMoveMode]=useState(false);
   const [xDraft,setXDraft]=useState('');
   const moveOrigins=useRef({});
@@ -67,9 +67,9 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
   const pts = points => points.map(p => project(p).join(',')).join(' ');
   const faces = [];
   indices.forEach(i => {
-    cuboid(0,i*L,-3,W,L,3).forEach((face,j) => faces.push({...face,key:`plate-${i}-${j}`,color:j===4?'#718096':'#38465c',plate:true}));
+    cuboid(0,i*L,-3,W,L,3).forEach((face,j) => faces.push({...face,key:`plate-${i}-${j}`,color:j===4?'#718096':'#38465c',plate:true,pallet:i}));
     // The amber area is physical edge clearance, not additional usable area.
-    [[0,i*L,W,M],[0,(i+1)*L-M,W,M],[0,i*L+M,M,L-2*M],[W-M,i*L+M,M,L-2*M]].forEach(([x,y,w,l],j) => faces.push({p:[point(x,y,.12),point(x+w,y,.12),point(x+w,y+l,.12),point(x,y+l,.12)],normal:[0,0,1],light:1,color:'#e5ad36',key:`margin-${i}-${j}`,margin:true}));
+    [[0,i*L,W,M],[0,(i+1)*L-M,W,M],[0,i*L+M,M,L-2*M],[W-M,i*L+M,M,L-2*M]].forEach(([x,y,w,l],j) => faces.push({p:[point(x,y,.12),point(x+w,y,.12),point(x+w,y+l,.12),point(x,y+l,.12)],normal:[0,0,1],light:1,color:'#e5ad36',key:`margin-${i}-${j}`,margin:true,pallet:i}));
   });
   visible.forEach(item => {
     const h = Math.min(item.h, heightCut-item.z);
@@ -120,21 +120,23 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
       <svg className={dragging?'pmc-scene-canvas dragging':'pmc-scene-canvas'} viewBox="0 0 900 510" role="group" aria-labelledby={`${id}-title ${id}-desc`}
         onPointerDown={e=>{if(e.button!==0)return;moved.current=false;
           const itemId=e.target.closest?.('[data-item-id]')?.getAttribute('data-item-id');
+          const palletId=e.target.closest?.('[data-pmc-index]')?.getAttribute('data-pmc-index');
           if(moveMode && onMoveCargo){const item=placements.find(p=>p.id===itemId);if(!item)return;onSelectItem?.(item.id);const bounds=limitsFor(item);if(!bounds.valid)return;
             const a=project([0,0,0]),b=project([1,0,0]);const rect=e.currentTarget.getBoundingClientRect();const scale=Math.min(rect.width/900,rect.height/510);const vx=(b[0]-a[0])*scale,vy=(b[1]-a[1])*scale;if(vx*vx+vy*vy<.01)return;
             moveOrigins.current[item.id]=item.x;drag.current={x:e.clientX,y:e.clientY,item,bounds,vx,vy};
-          }else drag.current={x:e.clientX,y:e.clientY,camera,itemId};
+          }else drag.current={x:e.clientX,y:e.clientY,camera,itemId,palletId};
           setDragging(true);e.currentTarget.setPointerCapture(e.pointerId);}}
         onPointerMove={e=>{if(!drag.current)return;const d=drag.current,dx=e.clientX-d.x,dy=e.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>5)moved.current=true;
           if(d.item){const x=d.item.x+(dx*d.vx+dy*d.vy)/(d.vx*d.vx+d.vy*d.vy);onMoveCargo?.(d.item,Math.max(d.bounds.min,Math.min(d.bounds.max,x)));}
           else setCamera({yaw:d.camera.yaw+dx*.008,pitch:Math.max(.04,Math.min(1.54,d.camera.pitch+dy*.006))});}}
-        onPointerUp={e=>{if(!moved.current && drag.current?.itemId)onSelectItem?.(drag.current.itemId);drag.current=null;setDragging(false);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
+        onPointerUp={e=>{if(!moved.current && drag.current?.itemId)onSelectItem?.(drag.current.itemId);
+          else if(!moved.current && drag.current?.palletId != null)onSelectPallet?.(Number(drag.current.palletId));drag.current=null;setDragging(false);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
         onPointerCancel={()=>{drag.current=null;setDragging(false);}}>
         <title id={`${id}-title`}>PMC paleti: 96 × 125 inç / 243,84 × 317,5 cm, ZX-11 konturu</title>
         <desc id={`${id}-desc`}>Döndürmek için sürükleyin. Bir yükü seçmek için tıklayın veya Tab ve Enter kullanın. Sarı şeritler dört yandaki 8,5 cm / yaklaşık 3,35 inç boşluğu gösterir. Planlama simülasyonudur.</desc>
         <defs><radialGradient id={`${id}-ground`}><stop offset="0" stopColor="#263a55" stopOpacity=".55"/><stop offset="1" stopColor="#142137" stopOpacity="0"/></radialGradient><marker id={`${id}-arrow`} viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 8 0 L 0 4 L 8 8" fill="none" stroke="#8195b1" strokeWidth="1.2"/></marker></defs>
         <ellipse cx="450" cy="378" rx="355" ry="115" fill={`url(#${id}-ground)`}/>
-        {sorted.map(f=><polygon key={f.key} data-item-id={f.item?.id} points={pts(f.p)} fill={shade(f.color,f.light)} fillOpacity={f.item && selectedPallet!=null && f.item.palletIndex!==selectedPallet ? .84 : 1} stroke={f.item?.id===selectedItemId?'#fff3ae':f.item?'#0e1728':f.margin?'#f3c75d':'#9aabc1'} strokeWidth={f.item?.id===selectedItemId?2.3:f.margin ? .5 : .8} strokeLinejoin="round" onClick={f.item?()=>select(f.item):undefined} className={f.item?'pmc-scene-box':undefined}><title>{f.item?`${f.item.name} · ${f.item.id} · ${fmt(f.item.w)} × ${fmt(f.item.l)} × ${fmt(f.item.h)} cm`:f.margin?'8,5 cm / ≈3,35″ kenar boşluğu':'PMC taban plakası'}</title></polygon>)}
+        {sorted.map(f=><polygon key={f.key} data-item-id={f.item?.id} data-pmc-index={f.pallet} points={pts(f.p)} fill={shade(f.color,f.light)} fillOpacity={f.item && selectedPallet!=null && f.item.palletIndex!==selectedPallet ? .84 : 1} stroke={f.item?.id===selectedItemId?'#fff3ae':f.item?'#0e1728':f.margin?'#f3c75d':'#9aabc1'} strokeWidth={f.item?.id===selectedItemId?2.3:f.margin ? .5 : .8} strokeLinejoin="round" onClick={f.item?()=>select(f.item):undefined} className={f.item?'pmc-scene-box':undefined}><title>{f.item?`${f.item.name} · ${f.item.id} · ${fmt(f.item.w)} × ${fmt(f.item.l)} × ${fmt(f.item.h)} cm`:f.margin?'8,5 cm / ≈3,35″ kenar boşluğu':'PMC taban plakası'}</title></polygon>)}
         {showContour && indices.map(i=>{
           const contour = [[0,0],[0,H],[100.33,H],[W,104.14],[W,0]].map(([x,z])=>[mirrorContour?W-x:x,z]);
           return <g key={`contour-${i}`} className="pmc-scene-contour">{[i*L,(i+1)*L].map((y,k)=><polyline key={k} points={pts(contour.map(([x,z])=>point(x,y,z)))} />)}{contour.slice(1,4).map(([x,z],j)=> <g key={j}>{line(point(x,i*L,z),point(x,(i+1)*L,z),{strokeDasharray:'5 5'})}</g>)}</g>;

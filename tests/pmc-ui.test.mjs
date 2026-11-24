@@ -29,7 +29,7 @@ const button=text=>[...document.querySelectorAll('button')].find(node=>node.text
 const field=label=>document.querySelector(`[aria-label="${label}"]`);
 const change=async(node,value)=>act(async()=>{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node),'value').set;setter.call(node,value);node.dispatchEvent(new dom.window.Event('input',{bubbles:true}));node.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await pause();});
 
-test('PMC interface handles packing, edits, toggles, reset and import review', async()=>{
+test('PMC interface handles packing, edits, toggles and reset', async()=>{
  await act(async()=>{root.render(React.createElement(PmcPlanner));await pause();});
  await act(pause);
  assert.equal(document.querySelector('.pmc-errors'),null);
@@ -116,25 +116,9 @@ test('PMC interface handles packing, edits, toggles, reset and import review', a
  await click(document.querySelector('.pmc-reset-dialog .primary'));
  assert.equal(document.querySelectorAll('.pmc-input-table tbody tr').length,3);
  assert.deepEqual(JSON.parse(localStorage.getItem('cargo-pmc-v1')).rows,originalState.rows);
- // Import is review-gated; a blank candidate must never be admitted automatically.
- await click(button('Elle aday satır ekle'));
- assert.equal(button('Listeye ekle (1)').disabled,true);
- assert.match(document.querySelector('.cargo-import').textContent,/Ölçü sırasını seçin/);
- const candidate=document.querySelector('.cargo-import fieldset');
- const inputs=[...candidate.querySelectorAll('input')];
- for (const [i,value] of ['İçe aktarılan yük','120','80','50','3'].entries()) await change(inputs[i],value);
- const selects=[...candidate.querySelectorAll('select')];
- await change(selects[0],'cm');await change(selects[1],'LWH');
- assert.equal(button('Listeye ekle (1)').disabled,true);
- await click(document.querySelector('.cargo-import-confirm input'));
- assert.equal(button('Listeye ekle (1)').disabled,false);
- await click(button('Listeye ekle (1)'));
- assert.equal(document.querySelectorAll('.pmc-input-table tbody tr').length,4);
- const imported=JSON.parse(localStorage.getItem('cargo-pmc-v1')).rows.at(-1);
- assert.equal(imported.quantity,3);assert.equal(imported.length,120);assert.equal(imported.width,80);assert.equal(imported.height,50);
- assert.equal(imported.stackable,false);assert.equal(imported.allowRotation,false);
- assert.ok(document.querySelector('.pmc-stale'));
- assert.equal(document.querySelectorAll('.cargo-import fieldset').length,0);
+ assert.equal(document.querySelector('.pmc-import-panel'),null);
+ assert.equal(document.querySelector('.pmc-piece-orientations'),null);
+ assert.ok(field('Yük 1 yön izni'));
 });
 
 test('high edge dropdown preserves longitudinal placement and clears on alternate choice',async()=>{

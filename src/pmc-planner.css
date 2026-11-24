@@ -6,16 +6,11 @@
 
 @media(max-width:1100px) and (min-width:521px){.pmc-results-stats>div{padding:0 10px}.pmc-results-stats span{font-size:9px}.pmc-results-stats strong{font-size:22px}}
 
-.pmc-import-panel{margin-bottom:18px}.pmc-import-panel>summary{padding:17px 22px;color:#e9c16c;cursor:pointer;font-size:12px}.pmc-import-panel .cargo-import{margin:0 14px 14px}
 
 .pmc-aircraft-transfer{padding:16px 22px;display:flex;align-items:center;gap:16px}.pmc-aircraft-transfer p{font-size:11px;line-height:1.6;color:#9ab0c8}.pmc-aircraft-transfer button{flex-shrink:0}.pmc-transfer-dialog{max-height:85dvh;overflow:auto}.pmc-transfer-dialog label small{display:block;font-size:11px;line-height:1.5;color:#9ab0c8;margin:6px 0}@media(max-width:600px){.pmc-aircraft-transfer{align-items:stretch;flex-direction:column}}
 .pmc-long-details {padding:20px;border-top:1px solid #34465f;color:#c4d1e3;line-height:1.6}.pmc-long-details article{padding:16px;margin:16px 0;border:1px solid #465574;border-radius:12px}.pmc-slot-scroll{overflow:auto}.pmc-slot-map{display:grid;gap:8px;max-width:900px}.pmc-slot-map>div{padding:10px;border:1px dashed #e8aa43;border-radius:6px;display:flex;flex-direction:column}.pmc-slot-map .support{background:#344d62;border:2px solid #61d7bf}.pmc-slot-map .blocked{background:repeating-linear-gradient(45deg,#493d2b,#493d2b 5px,#302c27 5px,#302c27 10px)}
 
-.pmc-piece-orientations { margin: 12px 0; padding: 12px; border: 1px solid #43536a; border-radius: 8px; }
-.pmc-piece-orientations summary { cursor: pointer; color: #ffce64; }
-.pmc-piece-orientation-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; }
-.pmc-piece-orientation-grid label { display: grid; gap: 5px; }
-.pmc-input-table select,.pmc-piece-orientation-grid select { max-width: 220px; color: #e7edf4; background: #1d2b3a; border: 1px solid #52637b; border-radius: 5px; padding: 6px; }
+.pmc-input-table select { max-width: 220px; color: #e7edf4; background: #1d2b3a; border: 1px solid #52637b; border-radius: 5px; padding: 6px; }
 
 .pmc-profile-diagram figcaption{padding:0 8px 8px;text-align:center;font-size:14px;font-weight:700;color:#e7edf4}
 .pmc-profile-sides{display:flex;justify-content:space-between;gap:8px;padding:0 12px;font-size:12px;font-weight:600;color:#c1cddd}

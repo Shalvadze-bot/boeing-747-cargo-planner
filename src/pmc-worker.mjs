@@ -1,17 +1,18 @@
 import {runLongCargo} from './pmc-long-cargo.mjs';
 import { runPacking } from './pmc-engine.mjs';
+import { normalizePmcInput, STRATEGY_NAMES } from './pmc-search-strategies.mjs';
+import { validatePmcCandidate } from './pmc-ai-validation.mjs';
 
 self.onmessage = ({ data }) => {
   try {
-    const rows = data.rows.map(row => ({ ...row,
-      length: Number(row.length), width: Number(row.width), height: Number(row.height), quantity: Number(row.quantity),
-      weight: row.weight === '' || row.weight == null ? null : Number(row.weight),
-    }));
-    const config = { ...data.config, maxPallets: Number(data.config.maxPallets),
-      maxOverhangCm: data.config.allowOverhang && data.config.maxOverhangCm !== '' && data.config.maxOverhangCm != null ? Number(data.config.maxOverhangCm) : null,
-      minOverhangHeightCm: data.config.allowOverhang && data.config.minOverhangHeightCm !== '' && data.config.minOverhangHeightCm != null ? Number(data.config.minOverhangHeightCm) : null,
-    };
-    self.postMessage({ result: (config.longCargo ? runLongCargo : runPacking)(rows, config) });
+    const { rows, config } = normalizePmcInput(data.rows, data.config);
+    const strategy = STRATEGY_NAMES.includes(data.strategy) ? data.strategy : undefined;
+    const result = (config.longCargo ? runLongCargo : runPacking)(rows, config, strategy);
+    if (strategy && !validatePmcCandidate(rows, config, result).valid) {
+      self.postMessage({ error: 'Kayıtlı AI yerleşimi mevcut ayarlarla doğrulanamadı.' });
+      return;
+    }
+    self.postMessage({ result });
   } catch {
     self.postMessage({ error: 'Hesaplama tamamlanamadı. Girdileri kontrol edip yeniden deneyin.' });
   }

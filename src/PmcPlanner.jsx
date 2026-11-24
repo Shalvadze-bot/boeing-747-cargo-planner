@@ -1,13 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Cube, Plus, Trash, MagicWand, DownloadSimple, Warning, Info, ArrowCounterClockwise, CheckCircle, X } from '@phosphor-icons/react';
 import { DEFAULT_CONFIG, SAMPLE_CARGO, PMC, contourHeight } from './pmc-engine.mjs';
-import PmcScene from './PmcScene';
+import { PmcPlanView, PmcPlacementDetails, ViewSwitch } from './PmcPlanView';
 import {runLongCargo} from './pmc-long-cargo.mjs';
 import LongCargoDetails from './LongCargoDetails';
 import PmcLongBalanceSettings from './PmcLongBalanceSettings';
 import {preparePmcTransfer} from './pmc-aircraft.mjs';
-import CargoImport from './CargoImport';
 import './pmc-planner.css';
+import './ai-packing.css';
+import { STRATEGY_NAMES } from './pmc-search-strategies.mjs';
+import { measuredEngine, packingSignature, unmarkedConfig, useAiPacking } from './use-ai-packing.mjs';
+import { AiPackingButton, AiPackingPanel } from './AiPackingPanel';
+import { cargoKey, expandPmcSnapshot, makePmcSnapshot, pmcRestoreConfig, readHistory, writeHistory } from './plan-history.mjs';
+import { layoutKey } from './pmc-plan-options.mjs';
+import { pmcContext, searchChatPlans } from './ai-plan-context.mjs';
 
 const STORE = 'cargo-pmc-v1';
 const profileMargin = 210 * PMC.margin / PMC.width; // Display scale only; base-edge clearance.
@@ -70,7 +76,7 @@ function PmcProfile({ mirrored }) {
   </figure>;
 }
 
-export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBacked = false, activityPanel}) {
+export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBacked = false, activityPanel, projectId, chatBridge, aircraftContext = [0,0,null,null,null]}) {
   const [transfer,setTransfer] = useState(null);
   const [transferError,setTransferError] = useState('');
   const [initial] = useState(restore);
@@ -78,6 +84,10 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
   const [config, setConfig] = useState(initial.config);
   const [result, setResult] = useState(null);
   const [resultSignature, setResultSignature] = useState('');
+  const [planView, setPlanView] = useState('3D');
+  const [history, setHistory] = useState(readHistory);
+  const [restoring, setRestoring] = useState(false);
+  const [historyNotice, setHistoryNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(true);
@@ -92,6 +102,27 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
   const timeout = useRef(null);
   const currentSignature = signature(rows, config);
   const stale = !!result && resultSignature !== currentSignature;
+  const lastPmc = history.pmc[0];
+  const previousOutdated = lastPmc && lastPmc.cargoKey !== cargoKey(rows);
+  const previousModeChanged = lastPmc && !!lastPmc.config?.longCargo !== !!config.longCargo;
+  const historyCheck = useRef(null);
+  const chooseItem = id => {
+    setSelectedItemId(id);
+    const piece = result?.placements.find(item=>item.id===id);
+    if (piece && selectedPallet !== null && selectedPallet !== piece.palletIndex && !piece.touchedPallets?.includes(selectedPallet)) {
+      setSelectedPallet(piece.palletIndex);
+    }
+  };
+  const choosePallet = index => {
+    setSelectedPallet(index);
+    setSelectedItemId(selectedItemId && result?.placements.some(item =>
+      item.id===selectedItemId && (item.palletIndex===index || item.touchedPallets?.includes(index))) ? selectedItemId : null);
+  };
+  const ai = useAiPacking({ rows, config, projectId, aircraft:aircraftContext, existing:stale?null:result, disabled:viewOnly });
+  const currentInputs = useRef(null);
+  currentInputs.current = { signature:currentSignature, aircraft:JSON.stringify(aircraftContext), result, rows, config };
+  const applying = useRef(null);
+  const aiPanel = useRef(null);
   const placements = result?.placements || [];
   const palletCount = result?.pallets?.length || 0;
   const visibleItems = placements.filter(item => selectedPallet === null || item.touchedPallets?.includes(selectedPallet) || item.palletIndex === selectedPallet);
@@ -116,8 +147,23 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
     catch { setSaved(false); }
   }, [rows, config, initial, viewOnly, cloudBacked]);
   useEffect(() => {
-    calculate(initial.rows, initial.config);
-    return () => { worker.current?.terminate(); clearTimeout(timeout.current); };
+    const saved = initial.config.aiApplied;
+    const strategy = STRATEGY_NAMES.includes(saved?.strategy) &&
+      saved.fingerprint === packingSignature(initial.rows,initial.config) ? saved.strategy : undefined;
+    const candidate = history.currentPmc;
+    const check = new AbortController();
+    const savedResult = expandPmcSnapshot(candidate);
+    if (savedResult && candidate.cargoKey === cargoKey(initial.rows) &&
+        packingSignature(initial.rows,candidate.config) === packingSignature(initial.rows,initial.config)) {
+      setBusy(true);
+      measuredEngine({rows:initial.rows,config:initial.config,baseline:savedResult},check.signal).then(checked=>{
+        if (check.signal.aborted) return;
+        if (checked.validation.valid) {
+          setResult(checked.result);setResultSignature(signature(initial.rows,initial.config));setBusy(false);
+        } else calculate(initial.rows,initial.config,strategy);
+      }).catch(()=>{ if(!check.signal.aborted) calculate(initial.rows,initial.config,strategy); });
+    } else calculate(initial.rows, initial.config, strategy);
+    return () => { check.abort(); historyCheck.current?.abort();worker.current?.terminate(); clearTimeout(timeout.current); applying.current?.abort(); };
   }, []);
   useEffect(() => {
     if (!resetOpen && !transfer) return;
@@ -137,7 +183,7 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
   }, [resetOpen,transfer]);
 
   function stop() { worker.current?.terminate(); worker.current = null; clearTimeout(timeout.current); setBusy(false); }
-  function calculate(nextRows = rows, nextConfig = config) {
+  function calculate(nextRows = rows, nextConfig = config, strategy, savePrevious = false) {
     stop(); setBusy(true); setError('');
     const snap = signature(nextRows, nextConfig);
     let instance;
@@ -147,12 +193,30 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
     instance.onmessage = ({ data }) => {
       if (worker.current !== instance) return;
       stop();
-      if (data.error) { setError(data.error); return; }
-      setResult(data.result); setResultSignature(snap); setSelectedPallet(0); setSelectedItemId(null); setHeightCut(244);
+      if (data.error) {
+        if (strategy) { calculate(nextRows, nextConfig); return; }
+        setError(data.error); return;
+      }
+      if (savePrevious) {
+        const latest = currentInputs.current;
+        if (latest.signature !== snap) return;
+        if (data.result.errors?.length) {
+          setError(data.result.errors.join(' '));
+          return;
+        }
+        try {
+          const clean = unmarkedConfig(nextConfig);
+          recordPmcResult(data.result,nextRows,clean);
+          if (nextConfig.aiApplied) setConfig(clean);
+          setResultSignature(signature(nextRows,clean));
+        }
+        catch (error) { setError(error.message); return; }
+      }
+      setResult(data.result); if (!savePrevious) setResultSignature(snap); setSelectedPallet(0); setSelectedItemId(null); setHeightCut(244);
     };
     instance.onerror = () => { if (worker.current === instance) { stop(); setError('Hesaplama yüklenemedi. Sayfayı yenileyip yeniden deneyin.'); } };
     timeout.current = setTimeout(() => { if (worker.current === instance) { stop(); setError('Hesaplama süresi doldu. Daha az parça ile yeniden deneyin.'); } }, 30000);
-    instance.postMessage({ rows: nextRows, config: nextConfig });
+    instance.postMessage({ rows: nextRows, config: nextConfig, strategy });
   }
   function moveCargo(item, x) {
     if(stale || busy || !result?.config?.longCargo)return;
@@ -166,12 +230,6 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
     if (key === 'orientationMode') return {...row, orientationMode:value, pieceOrientations:{}};
     if (key === 'quantity') return {...row, quantity:value, pieceOrientations:Object.fromEntries(Object.entries(row.pieceOrientations||{}).filter(([i])=>Number(i)<=Number(value)))};
     return {...row, [key]: value};
-  })); }
-  function updatePieceOrientation(id, number, value) { setRows(previous => previous.map(row => {
-    if(row.id!==id)return row;
-    const overrides={...row.pieceOrientations};
-    if(value==='inherit')delete overrides[number]; else overrides[number]=value;
-    return {...row,pieceOrientations:overrides};
   })); }
   function updateConfig(key, value) { setConfig(previous => ({ ...previous, [key]: value })); }
   function addRow() {
@@ -196,8 +254,112 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'pmc-3d-simulasyon-plani.json'; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function recordPmcResult(next, nextRows, nextConfig) {
+    const latest = currentInputs.current;
+    const existing = latest.result;
+    let basis;
+    try { basis = JSON.parse(resultSignature); } catch { /* No completed geometry yet. */ }
+    const previous = existing && !existing.errors?.length && basis && (
+      layoutKey(existing) !== layoutKey(next) || cargoKey(basis.rows) !== cargoKey(nextRows))
+      ? makePmcSnapshot(existing,basis.rows,basis.config) : null;
+    setHistory(writeHistory(current=>({ ...current,
+      currentPmc:makePmcSnapshot(next,nextRows,nextConfig),
+      pmc:previous ? [previous,...current.pmc] : current.pmc,
+    })));
+    setHistoryNotice('');
+  }
+
+  function standardPlacement() {
+    ai.cancel('Standart yerleşim başlatıldı.');
+    // Keep existing metadata until the new standard result passes its normal checks.
+    calculate(rows,config,undefined,true);
+  }
+
+  async function applyAiPlan(outcome, candidate) {
+    if (viewOnly || busy || restoring || applying.current || !candidate.canApply) throw new Error('Bu aday uygulanamıyor.');
+    const expected = currentInputs.current;
+    const controller = new AbortController();
+    applying.current = controller;
+    try {
+      const checked = await measuredEngine({ rows, config:unmarkedConfig(config), baseline:candidate.result }, controller.signal);
+      const latest = currentInputs.current;
+      if (latest.signature !== expected.signature || latest.aircraft !== expected.aircraft || latest.result !== expected.result) {
+        throw new Error('Yerleşim veya girdiler değişti. AI denemesini yeniden çalıştırın.');
+      }
+      if (!checked.validation.valid) throw new Error('Aday son kontrolden geçmedi. Mevcut plan korundu.');
+      const next = { ...unmarkedConfig(config), aiApplied:{
+        strategy:candidate.strategy, fingerprint:packingSignature(rows,config),
+      } };
+      recordPmcResult(checked.result,rows,next);
+      setConfig(next);
+      setResult(checked.result);
+      setResultSignature(signature(rows,next));
+      setSelectedPallet(0);setSelectedItemId(null);setHeightCut(244);
+    } finally {
+      if (applying.current === controller) applying.current = null;
+    }
+  }
+
+  async function restorePmcPlan() {
+    if (viewOnly || busy || restoring || !lastPmc || previousOutdated || previousModeChanged || ai.progress) return false;
+    const saved = expandPmcSnapshot(lastPmc);
+    if (!saved) { setHistoryNotice('Önceki yerleşim okunamadı.'); return false; }
+    const controller = new AbortController();
+    historyCheck.current = controller;
+    const before = currentInputs.current;
+    const targetConfig = pmcRestoreConfig(lastPmc,config);
+    setRestoring(true);
+    try {
+      const checked = await measuredEngine({rows,config:targetConfig,baseline:saved},controller.signal);
+      if (controller.signal.aborted || currentInputs.current.signature !== before.signature ||
+          currentInputs.current.result !== before.result) {
+        throw new Error('Yük veya ayar değişti. Önceki plan uygulanmadı.');
+      }
+      if (!checked.validation.valid) throw new Error('Önceki plan güncel kısıtlarda geçerli değil: '+checked.validation.errors[0]);
+      const next = {...checked.result,config:{...saved.config,...targetConfig}};
+      setHistory(writeHistory(current=>({...current,pmc:current.pmc.slice(1),currentPmc:makePmcSnapshot(next,rows,targetConfig)})));
+      setConfig(targetConfig);
+      setResult(next);
+      setResultSignature(signature(rows,targetConfig));
+      if (selectedItemId && !next.placements.some(item=>item.id===selectedItemId)) setSelectedItemId(null);
+      if (selectedPallet !== null && !next.pallets.some(item=>item.index===selectedPallet)) setSelectedPallet(next.pallets[0]?.index ?? 0);
+      setHistoryNotice('Önceki yerleşim ve sabit konumlar geri yüklendi.');
+      return true;
+    } catch (error) {
+      if (!controller.signal.aborted) setHistoryNotice(error.message);
+      return false;
+    } finally {
+      if (!controller.signal.aborted) setRestoring(false);
+      if (historyCheck.current === controller) historyCheck.current = null;
+    }
+  }
+
+  useImperativeHandle(chatBridge, () => ({
+    context: () => pmcContext({rows,config,result,stale,selectedItemId,selectedPallet,outcome:ai.outcome}),
+    key: () => JSON.stringify([currentSignature,resultSignature,result && layoutKey(result),aircraftContext]),
+    async inspect(signal) {
+      if (!result || stale || busy) throw new Error('Güncel verilerle önce palet yerleşimini hesaplayın.');
+      const inspected = await measuredEngine({rows,config:unmarkedConfig(config),baseline:result},signal);
+      return {validation:inspected.validation,unplaced:result.unplaced,selectedPallet};
+    },
+    async optimize(scope, signal, onProgress) {
+      if (viewOnly || busy || restoring || ai.progress) throw new Error('PMC yerleşimi şu anda hesaplanamıyor.');
+      return searchChatPlans({rows,config,current:stale?null:result,singlePallet:scope==='optimize_pmc'?selectedPallet??-1:null,
+        objective:ai.objective,aircraft:aircraftContext},signal,onProgress);
+    },
+    getOutcome: () => ai.outcome,
+    apply: applyAiPlan,
+    canRestore: !!lastPmc && !previousOutdated && !previousModeChanged && !busy && !restoring && !ai.progress && !viewOnly,
+    restore: restorePmcPlan,
+    import(incoming) {
+      if (viewOnly || busy || restoring) throw new Error('Yük listesi şu anda düzenlenemiyor.');
+      if (!importRows(incoming)) throw new Error('Yük listesi en fazla 100 satır olabilir.');
+    },
+  }));
+
+  const actionBlocked = busy || restoring || viewOnly || !rows.length;
   const placeButton = (
-    <button type="button" className="primary" disabled={busy || !rows.length} onClick={() => calculate()}>
+    <button type="button" className="primary" disabled={actionBlocked} onClick={standardPlacement}>
       <MagicWand size={21} aria-hidden="true"/>
       {busy ? 'Yerleşim hesaplanıyor…' : 'Paletlere yerleştir'}
     </button>
@@ -259,25 +421,38 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
         <section className="pmc-input-panel panel">
           <fieldset className="pmc-view-fieldset" disabled={viewOnly}>
           <div className="panel-heading"><div><h2>01 <span>Yük listesi</span></h2><p>Her yük grubuna ayrı renk · Tüm ölçüler cm · En fazla 200 parça</p></div><button className="outline amber" onClick={addRow} disabled={rows.length >= 100}><Plus size={17}/> Yük ekle</button></div>
-          <div className="pmc-table-scroll"><table className="pmc-input-table"><thead><tr><th>Yük / renk</th><th>Uzunluk</th><th>Genişlik</th><th>Yükseklik</th><th>Adet</th><th>kg / parça</th><th title="Yalnızca tabanda 90° döndürür; yükseklik ve dik konum korunur.">90° çevir</th><th>Yön izni</th><th title="İşaretli yük başka bir parçayı üstünde taşıyabilir. Ezilme dayanımı hesaplanmaz.">Üstüne yük</th><th><span className="pmc-sr-only">Sil</span></th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id}><td><div className="pmc-name-input"><input aria-label={`Yük ${index + 1} rengi`} type="color" value={/^#[0-9a-f]{6}$/i.test(row.color) ? row.color : COLORS[index % COLORS.length]} onChange={e => updateRow(row.id, 'color', e.target.value)}/><input aria-label={`Yük ${index + 1} adı`} value={row.name} maxLength="60" onChange={e => updateRow(row.id, 'name', e.target.value)}/></div></td>{[['length','uzunluk'],['width','genişlik'],['height','yükseklik'],['quantity','adet'],['weight','ağırlık']].map(([key, label]) => <td key={key}><input aria-label={`Yük ${index + 1} ${label}`} type="number" min={key === 'quantity' ? 1 : 0.01} step={key === 'quantity' ? 1 : 'any'} placeholder={key === 'weight' ? 'İsteğe bağlı' : ''} value={row[key] ?? ''} onChange={e => updateRow(row.id, key, e.target.value)}/></td>)}<td><input type="checkbox" aria-label={`Yük ${index + 1} tabanda döndürülebilir`} checked={row.allowRotation} onChange={e => updateRow(row.id, 'allowRotation', e.target.checked)}/></td><td><select aria-label={`Yük ${index + 1} yön izni`} value={row.orientationMode || 'upright'} onChange={e=>updateRow(row.id, 'orientationMode', e.target.value)}><OrientationOptions/></select></td><td><input type="checkbox" aria-label={`Yük ${index + 1} üstüne yük konabilir`} checked={row.stackable} onChange={e => updateRow(row.id, 'stackable', e.target.checked)}/></td><td><button className="pmc-icon-button" aria-label={`Yük ${index + 1} sil`} onClick={() => setRows(previous => previous.filter(item => item.id !== row.id))}><Trash size={17}/></button></td></tr>)}</tbody></table></div>
-          <p>Yük yön izni gruptaki tüm parçalara uygulanır; grup seçimini değiştirmek parça istisnalarını sıfırlar. Yana yatırma izni dik yerleşime de izin verir; program izin verilen yüzeyler arasından seçim yapar. 90° seçeneği her yüzeyde yatay dönüşü kontrol eder.</p>
-          {rows.map((row,index) => Number.isInteger(Number(row.quantity)) && Number(row.quantity)>0 && Number(row.quantity)<=200 && <details className="pmc-piece-orientations" key={row.id}><summary>{row.name || `Yük ${index+1}`} · Parça bazında yön izinleri</summary><p>Her parça varsayılan olarak grubun iznini kullanır. Farklı izin için seçin.</p><div className="pmc-piece-orientation-grid">{Array.from({length:Number(row.quantity)},(_,i)=><label key={i}>{row.name || `Yük ${index+1}`} · {row.id}:{i+1}<select aria-label={`${row.name || `Yük ${index+1}`} parça ${i+1} yön izni`} value={row.pieceOrientations?.[i+1] || 'inherit'} onChange={e=>updatePieceOrientation(row.id,i+1,e.target.value)}><option value="inherit">Grup iznini kullan</option><OrientationOptions/></select></label>)}</div></details>)}
+          <div className="pmc-table-scroll"><table className="pmc-input-table"><thead><tr><th>Yük / renk</th><th>Uzunluk</th><th>Genişlik</th><th>Yükseklik</th><th>Adet</th><th>kg / parça</th><th title="Yalnızca tabanda 90° döndürür; yükseklik ve dik konum korunur.">90° çevir</th><th title="Satırdaki tüm parçaların izin verilen yönünü seçin.">Yön izni</th><th title="İşaretli yük başka bir parçayı üstünde taşıyabilir. Ezilme dayanımı hesaplanmaz.">Üstüne yük</th><th><span className="pmc-sr-only">Sil</span></th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id}><td><div className="pmc-name-input"><input aria-label={`Yük ${index + 1} rengi`} type="color" value={/^#[0-9a-f]{6}$/i.test(row.color) ? row.color : COLORS[index % COLORS.length]} onChange={e => updateRow(row.id, 'color', e.target.value)}/><input aria-label={`Yük ${index + 1} adı`} value={row.name} maxLength="60" onChange={e => updateRow(row.id, 'name', e.target.value)}/></div></td>{[['length','uzunluk'],['width','genişlik'],['height','yükseklik'],['quantity','adet'],['weight','ağırlık']].map(([key, label]) => <td key={key}><input aria-label={`Yük ${index + 1} ${label}`} type="number" min={key === 'quantity' ? 1 : 0.01} step={key === 'quantity' ? 1 : 'any'} placeholder={key === 'weight' ? 'İsteğe bağlı' : ''} value={row[key] ?? ''} onChange={e => updateRow(row.id, key, e.target.value)}/></td>)}<td><input type="checkbox" aria-label={`Yük ${index + 1} tabanda döndürülebilir`} checked={row.allowRotation} onChange={e => updateRow(row.id, 'allowRotation', e.target.checked)}/></td><td><select aria-label={`Yük ${index + 1} yön izni`} value={Object.keys(row.pieceOrientations ?? {}).length ? 'saved' : row.orientationMode || 'upright'} onChange={e=>updateRow(row.id, 'orientationMode', e.target.value)}>{Object.keys(row.pieceOrientations ?? {}).length>0&&<option value="saved" disabled>Özel yönler (kayıtlı)</option>}<OrientationOptions/></select></td><td><input type="checkbox" aria-label={`Yük ${index + 1} üstüne yük konabilir`} checked={row.stackable} onChange={e => updateRow(row.id, 'stackable', e.target.checked)}/></td><td><button className="pmc-icon-button" aria-label={`Yük ${index + 1} sil`} onClick={() => setRows(previous => previous.filter(item => item.id !== row.id))}><Trash size={17}/></button></td></tr>)}</tbody></table></div>
           {!rows.length && <p className="pmc-empty-input">Başlamak için bir yük ekleyin.</p>}
-          <div className="pmc-input-footer"><span><b>{rows.length}</b> yük grubu · <b>{format(totalRequested, 0)}</b> parça<small>{saved ? 'Girdiler bu tarayıcıda kaydedilir.' : 'Tarayıcı kaydı kullanılamıyor.'}</small></span><div>{busy && <button onClick={stop}>İptal</button>}{placeButton}</div></div>
+          <div className="pmc-input-footer"><span><b>{rows.length}</b> yük grubu · <b>{format(totalRequested, 0)}</b> parça<small>{saved ? 'Girdiler bu tarayıcıda kaydedilir.' : 'Tarayıcı kaydı kullanılamıyor.'}</small></span><div>{busy && <button onClick={stop}>İptal</button>}{placeButton}<AiPackingButton ai={ai} disabled={actionBlocked}/></div></div>
           </fieldset>
         </section>
+        {!viewOnly && <div ref={aiPanel}><AiPackingPanel ai={ai} onApply={applyAiPlan}/></div>}
         {!viewOnly && config.longCargo && <PmcLongBalanceSettings profile={config.pmcBalance}
           onChange={(key,value)=>setConfig(previous=>({...previous,pmcBalance:{...previous.pmcBalance,[key]:value}}))}/>}
-        {!viewOnly && <details className="panel pmc-import-panel"><summary>Fotoğraf veya PDF’den yük listesi aktar</summary><CargoImport onImport={importRows}/></details>}
         {(error || result?.errors?.length > 0) && <div className="pmc-errors" role="alert"><Warning size={21}/><div>{error && <p>{error}</p>}{result?.errors?.map((item, i) => <p key={i}>{typeof item === 'string' ? item : item.message || JSON.stringify(item)}</p>)}</div></div>}
         <section className="pmc-output panel" aria-busy={busy}>
-          <div className="panel-heading"><div><h2>02 <span>3D palet planı</span></h2><p>Bir paleti seçerek büyük görün · Parçaya tıklayarak ölçülerini incele</p></div><button className="text-btn" onClick={download} disabled={!result || stale || busy || !!result.errors?.length}><DownloadSimple size={17}/> JSON indir</button></div>
+          <div className="panel-heading"><div><h2>02 <span>{planView} palet planı</span></h2><p>Bir paleti seçerek büyük görün · Parçaya tıklayarak ölçülerini incele</p></div><button className="text-btn" onClick={download} disabled={!result || stale || busy || !!result.errors?.length}><DownloadSimple size={17}/> JSON indir</button></div>
           {stale && <div className="pmc-stale" role="status"><Warning size={17}/> Girdiler değişti. Görünüm önceki hesaplamayı gösteriyor; yeniden yerleştirin.</div>}
           <div className="pmc-results-stats"><div><span>{configForResult.longCargo?'Fiziksel PMC':'Kullanılan palet'}</span><strong>{palletCount}<small> PMC</small></strong></div><div><span>Yerleşen parça</span><strong>{placements.length}<small> / {result?.summary?.requestedCount ?? totalRequested}</small></strong></div><div><span>Yerleşen hacim</span><strong>{format(volume, 2)}<small> m³</small></strong></div><div title="Net taban üzerindeki ZX-11 geometrik zarfına oran. Kenar boşluklarına taşan hacim dahil değildir."><span>Geometrik zarf doluluğu</span><strong>{configForResult.longCargo ? '—' : format(utilization, 1)}<small>%</small></strong></div><div><span>{configForResult.longCargo?'Kenar taşması':'Üst taşma'}</span><strong className={overhangs.length ? 'pmc-amber-text' : ''}>{overhangs.length}<small> inceleme</small></strong></div></div>
           {onImportAircraft && !configForResult.longCargo && <div className="pmc-aircraft-transfer"><button className="outline amber" disabled={!result || stale || busy || !!result.errors?.length || !placements.length} onClick={openTransfer}>Uçak paletlerine ekle</button><p>Renkli yükler uçak 3D görünümüne kopyalanır. Mevcut yükler korunur; sonraki PMC düzenlemeleri kopyayı değiştirmez.</p></div>}
           <div className="pmc-pallet-select" aria-label="Görüntülenecek palet"><button className={selectedPallet === null ? 'active' : ''} disabled={!!configForResult.longCargo} onClick={() => { setSelectedPallet(null); setSelectedItemId(null); }}>Tüm paletler</button>{(result?.pallets || []).map(pallet => <button key={pallet.index} className={selectedPallet === pallet.index ? 'active' : ''} onClick={() => { setSelectedPallet(pallet.index); setSelectedItemId(null); }}><Cube size={17}/><span>PMC {String(pallet.index + 1).padStart(2, '0')}<small>{pallet.items.length} parça teması</small></span></button>)}</div>
+          <div className="pmc-plan-tools">
+            <ViewSwitch view={planView} onChange={setPlanView} label="PMC 2D / 3D görünümü"/>
+            {!viewOnly && lastPmc && <div className="plan-history">
+              <button className="outline amber" disabled={!!previousOutdated || !!previousModeChanged || busy || restoring || !!ai.progress}
+                onClick={restorePmcPlan}>{restoring?'Doğrulanıyor…':'Önceki Plana Dön'}</button>
+              {previousOutdated && <small>Önceki plan eski. Yük listesi değişti.</small>}
+              {!previousOutdated && previousModeChanged && <small>Önceki plan farklı bir PMC modunda.</small>}
+            </div>}
+          </div>
+          {historyNotice && <p className="placement-warning" role="status">{historyNotice}</p>}
           <div className="pmc-view-options"><label className="pmc-checkbox"><input type="checkbox" checked={showContour} onChange={e => setShowContour(e.target.checked)}/> Kontur</label><label className="pmc-checkbox"><input type="checkbox" checked={labels} onChange={e => setLabels(e.target.checked)}/> Etiketler</label><label className="pmc-checkbox"><input aria-label="Ölçüler" type="checkbox" checked={showDimensions} onChange={e => setShowDimensions(e.target.checked)}/> Ölçüler</label><label className="pmc-layer">Katman üst sınırı <input aria-label="Katman üst sınırı" type="range" min="0" max="244" step="1" value={heightCut} onChange={e => setHeightCut(Number(e.target.value))}/><b>{heightCut === 244 ? 'Tümü' : `${heightCut} cm`}</b></label></div>
-          {result ? <PmcScene placementAction={viewOnly ? undefined : placeButton} onMoveCargo={!viewOnly && result.config?.longCargo && !stale && !busy ? moveCargo : undefined} placements={placements} palletCount={Math.max(1, palletCount)} selectedPallet={selectedPallet} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} mirrorContour={!!configForResult.mirrored} showContour={showContour} labels={labels} showDimensions={showDimensions} heightCut={heightCut === 244 ? Infinity : heightCut}/> : <div className="pmc-loading"><Cube size={48}/><p>{busy ? 'Paletler hazırlanıyor…' : 'Yüklerinizi girip yerleşimi hesaplayın.'}</p></div>}
+          {result ? <PmcPlanView view={planView} result={{...result,config:configForResult}}
+            pallet={selectedPallet} itemId={selectedItemId} onItem={chooseItem} onPallet={choosePallet}
+            placementAction={viewOnly ? undefined : <>{placeButton}<AiPackingButton ai={ai} disabled={actionBlocked} showObjective={false}
+              onStart={() => { void ai.start(); aiPanel.current?.scrollIntoView({block:'start'}); }}/></>} onMoveCargo={!viewOnly && result.config?.longCargo && !stale && !busy ? moveCargo : undefined}
+            showContour={showContour} labels={labels} showDimensions={showDimensions} heightCut={heightCut === 244 ? Infinity : heightCut}/> : <div className="pmc-loading"><Cube size={48}/><p>{busy ? 'Paletler hazırlanıyor…' : 'Yüklerinizi girip yerleşimi hesaplayın.'}</p></div>}
+          {result && <PmcPlacementDetails result={result} pallet={selectedPallet} itemId={selectedItemId} onItem={chooseItem}/>}
           <div className="pmc-color-legend">{[...new Map(placements.map(item => [item.rowId, item])).values()].map(item => <span key={item.rowId}><i style={{background:item.color}}/>{item.name}</span>)}</div>
           {result?.config?.longCargo && <LongCargoDetails pallets={result.pallets.filter(pallet => selectedPallet === null || pallet.index === selectedPallet)}/>}
           {result && <div className="pmc-geometry-note"><Info size={17}/><p>Sezgisel geometrik arama; en iyi çözüm garantisi yoktur. Hacim, paketlerin dış ölçülerinden hesaplanır. Doluluk, net taban üzerindeki ZX-11 zarfına oranlanır; kenar boşluklarındaki taşma hacmi hariçtir. Bu görünüm uçuşa uygunluk veya operasyon onayı değildir.</p></div>}

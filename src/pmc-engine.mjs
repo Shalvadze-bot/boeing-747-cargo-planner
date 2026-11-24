@@ -1,3 +1,5 @@
+import { strategyOrder, strategyOrientations } from './pmc-search-strategies.mjs';
+
 /** Upright-box heuristic simulator. All dimensions and world coordinates are cm.
  * runPacking(rows, config) never mutates inputs. Validation failures return errors.
  * Rows: {id,name,length,width,height,quantity,weight?,stackable?,allowRotation?,color?}.
@@ -85,7 +87,7 @@ function* candidatePoints(grids,z){
   for(const x of xs)for(const g of active)if(g.xs.has(x))yield {x,y,z,w:g.w,l:g.l,h:g.h,face:g.face};
  }
 }
-function pack(items,c){
+function pack(items,c,strategy){
  const placements=[],unplaced=[];let allocated=0;
  for(const item of items){
  let chosen=null;
@@ -103,7 +105,7 @@ function pack(items,c){
    const edges=local.filter(b=>Math.abs(b.z+b.h-z)<=EPS||(b.z<z+maxH-EPS&&b.z+b.h>z+EPS));
    const rowBlockers=new Map(),rowSupports=new Map();
    const grids=[];
-   for(const [w,l,h,face] of orientations(item)){
+   for(const [w,l,h,face] of strategyOrientations(orientations(item),strategy)){
     const xs=unique([PMC.margin,PMC.width-PMC.margin-w,...edges.flatMap(b=>z===0?[b.x+b.w,b.x-w]:[b.x,b.x+b.w-w,b.x+b.w,b.x-w])])
      .filter(x=>between(PMC.margin,x)&&between(x+w,PMC.width-PMC.margin));
     const ys=unique([start,end-l,...edges.flatMap(b=>z===0?[b.y+b.l,b.y-l]:[b.y,b.y+b.l-l,b.y+b.l,b.y-l])])
@@ -152,7 +154,7 @@ function pack(items,c){
  * Pallet volume metrics clip incoming/outgoing overhang at physical deck boundaries;
  * weight is NOT apportioned to pallets: structural load distribution is unknown.
  */
-export function runPacking(inputRows,config={}){
+export function runPacking(inputRows,config={},strategy){
  const invalidConfig=config===null||typeof config!=='object'||Array.isArray(config);
  const {errors,c,rows}=validate(inputRows,invalidConfig?{}:config);
  if(invalidConfig)errors.push('Ayarlar bir nesne olmalı.');
@@ -162,7 +164,8 @@ export function runPacking(inputRows,config={}){
  const items=rows.flatMap(r=>Array.from({length:r.quantity},(_,i)=>({...r,orientationMode:r.pieceOrientations?.[i+1]??r.orientationMode??'upright',instanceId:`${r.id}:${i+1}`})));
  const orders=[(a,b)=>b.length*b.width*b.height-a.length*a.width*a.height,(a,b)=>b.height-a.height||b.width*b.length-a.width*a.length,(a,b)=>b.width*b.length-a.width*a.length||b.height-a.height];
  let best=null;
- for(const sort of orders){const run=pack([...items].sort(sort),c);if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;}
+ const alternate=strategyOrder(strategy);
+ for(const sort of alternate?[alternate]:orders){const run=pack([...items].sort(sort),c,strategy);if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;}
  const {placements,unplaced,allocated}=best;result.placements=placements;result.unplaced=unplaced;
  result.pallets=Array.from({length:allocated},(_,index)=>{const parts=placements.filter(b=>b.touchedPallets.includes(index));return {index,items:parts,metrics:{itemCount:parts.length,originatingCount:parts.filter(b=>b.palletIndex===index).length,maxHeight:Math.max(0,...parts.map(b=>b.z+b.h)),volumeM3:parts.reduce((s,b)=>s+b.w*b.h*Math.max(0,Math.min(b.y+b.l,(index+1)*PMC.length)-Math.max(b.y,index*PMC.length))/1e6,0),reviewRequired:parts.some(b=>b.reviewRequired)}};});
  result.summary={requestedCount:items.length,placedCount:placements.length,unplacedCount:unplaced.length,palletCount:allocated,volumeM3:placements.reduce((s,b)=>s+b.w*b.l*b.h/1e6,0),knownWeightKg:placements.reduce((s,b)=>s+(b.weight??0),0),unknownWeightCount:placements.filter(b=>b.weight===null).length,overhangCount:placements.filter(b=>b.reviewRequired).length};

@@ -3,13 +3,14 @@ import { Users } from '@phosphor-icons/react';
 import { App } from './App';
 import { ProjectActivity } from './ProjectActivity';
 import { AIRCRAFT_MODEL } from './aircraft-profile.mjs';
+import { PLAN_HISTORY_KEY, normalizeHistory } from './plan-history.mjs';
 
 const AIRCRAFT_KEY = 'cargo-demo-a330-v1';
 const PREVIOUS_AIRCRAFT_KEY = 'cargo-demo-v1';
 const PMC_KEY = 'cargo-pmc-v1';
 const RECOVERY_KEY = 'cargo-demo-recovery-v1';
 const OWNER_KEY = 'cargo-cloud-owner-id';
-const CACHE_KEYS = [AIRCRAFT_KEY, PREVIOUS_AIRCRAFT_KEY, PMC_KEY, RECOVERY_KEY, OWNER_KEY];
+const CACHE_KEYS = [AIRCRAFT_KEY, PREVIOUS_AIRCRAFT_KEY, PMC_KEY, RECOVERY_KEY, OWNER_KEY, PLAN_HISTORY_KEY];
 const EMPTY_PAYLOAD = { version: 1, aircraft: null, pmc: null, recovery: [] };
 
 function readLocalPayload() {
@@ -20,8 +21,10 @@ function readLocalPayload() {
   const aircraft = read(AIRCRAFT_KEY) || read(PREVIOUS_AIRCRAFT_KEY);
   const pmc = read(PMC_KEY);
   const recovery = read(RECOVERY_KEY);
-  return aircraft || pmc || recovery
-    ? { version: 1, aircraft, pmc, recovery: Array.isArray(recovery) ? recovery : [] }
+  const history = read(PLAN_HISTORY_KEY);
+  return aircraft || pmc || recovery || history
+    ? { version: 1, aircraft, pmc, recovery: Array.isArray(recovery) ? recovery : [],
+      ...(history?.version === 1 ? { optimizationHistory:normalizeHistory(history) } : {}) }
     : null;
 }
 
@@ -35,7 +38,7 @@ function readLegacyPlan() {
 }
 
 function hydrateLocalPlan(payload) {
-  for (const [key, value] of [[AIRCRAFT_KEY, payload.aircraft], [PMC_KEY, payload.pmc], [RECOVERY_KEY, payload.recovery]]) {
+  for (const [key, value] of [[AIRCRAFT_KEY, payload.aircraft], [PMC_KEY, payload.pmc], [RECOVERY_KEY, payload.recovery], [PLAN_HISTORY_KEY, payload.optimizationHistory]]) {
     if (value == null) localStorage.removeItem(key);
     else localStorage.setItem(key, JSON.stringify(value));
   }
@@ -312,7 +315,7 @@ export function CloudPlanGate() {
     const panel = <ProjectActivity online={activity?.online ?? null} changedBy={latest.last_changed_by}
       changedAt={projectTimestamp(latest.updated_at)} canEdit={activeProject.can_edit}
       requestMembers={(action, email) => projectRequest(membersPath, action ? { method: 'POST', body: { action, email } } : {})}/>;
-    return <App cloudProjectName={activeProject.name} syncState={syncState} viewOnly={!activeProject.can_edit} activityPanel={panel}
+    return <App cloudProjectId={activeProject.id} cloudProjectName={activeProject.name} syncState={syncState} viewOnly={!activeProject.can_edit} activityPanel={panel}
       onReloadCloud={reloadCloudProject} onGoProjects={goToProjects} onSaveProject={goToProjects}/>;
   }
 

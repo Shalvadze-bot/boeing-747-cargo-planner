@@ -14,3 +14,6 @@ public/ocr/
 
 # Local Supabase CLI state
 supabase/.temp/
+
+# Local AI preview usage database
+.ai-preview/

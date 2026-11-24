@@ -1,3 +1,4 @@
+import { strategyOrder, strategyOrientations } from './pmc-search-strategies.mjs';
 import { balanceProfile, measurePmcBalance } from './pmc-long-balance.mjs';
 import { PMC, orientations, ORIENTATION_MODES, supportCoverage } from './pmc-engine.mjs';
 
@@ -89,8 +90,8 @@ function placementGeometry(box) {
   };
 }
 
-function baseCandidates(row) {
-  return orientations(row).flatMap(([w,l,h,orientationFace]) => ALIGNMENTS.map(alignment => ({
+function baseCandidates(row, strategy) {
+  return strategyOrientations(orientations(row),strategy).flatMap(([w,l,h,orientationFace]) => ALIGNMENTS.map(alignment => ({
     w,l,h,orientationFace,alignment,rotated:w!==row.width,
     x:alignment==='front' ? PMC.margin : alignment==='rear' ? PMC.width-PMC.margin-w : (PMC.width-w)/2,
     y:alignment==='left' ? PMC.margin : alignment==='right' ? PMC.length-PMC.margin-l : (PMC.length-l)/2,
@@ -106,11 +107,11 @@ function within(value, range) {
   return value >= range.min - EPS && value <= range.max + EPS;
 }
 
-function prepareItem(row, number, config, warnings) {
+function prepareItem(row, number, config, warnings, strategy) {
   const id = `${row.id}:${number}`;
   const mirrored = !!config.mirrored;
   const requested = config.longCargoAlignment ?? 'auto';
-  const candidates = baseCandidates({...row, orientationMode:row.pieceOrientations?.[number] ?? row.orientationMode ?? 'upright'});
+  const candidates = baseCandidates({...row, orientationMode:row.pieceOrientations?.[number] ?? row.orientationMode ?? 'upright'},strategy);
   const match = anchor => candidates.find(candidate =>
     candidate.w===anchor.w && candidate.l===anchor.l && candidate.h===anchor.h && candidate.rotated===anchor.rotated);
   const validY = anchor => Number.isFinite(anchor.y) && within(anchor.y, axisRange(anchor.l, PMC.length));
@@ -484,7 +485,7 @@ function describePlacement(box, requested) {
   return 'Seçilen hizalamaya göre şematik yerleşim yapıldı.';
 }
 
-export function runLongCargo(rows,config={}) {
+export function runLongCargo(rows,config={},strategy) {
   const result={config:{...config,longCargo:true},positionModel:'INDEPENDENT_SCENARIOS_EQUAL_PITCH_NOT_AIRCRAFT_ALLOCATION',errors:[],warnings:['YALNIZCA TEST / GEOMETRİK ÖNİZLEME — uçuş veya yükleme onayı değildir.',...TECHNICAL_CHECKS.map(s=>s+': teknik bilgi / doğrulama bekliyor.')],placements:[],pallets:[],unplaced:[],summary:{requestedCount:0,placedCount:0,palletCount:0,physicalPmcCount:0,positionCount:0,knownWeightKg:0,unknownWeightCount:0}};
   if(!Array.isArray(rows)||rows.length>100){result.errors.push('En fazla 100 yük satırı.');return result;}
   const count=rows.reduce((s,r)=>s+r.quantity,0);
@@ -495,8 +496,9 @@ export function runLongCargo(rows,config={}) {
   if(!Number.isInteger(max)||max<1||max>30){result.errors.push('Fiziksel PMC sınırı 1–30 olmalı.');return result;}
   if(!['auto',...ALIGNMENTS].includes(config.longCargoAlignment??'auto')){result.errors.push('Yerleşim seçimi geçersiz.');return result;}
 
-  const items=rows.flatMap(row=>Array.from({length:row.quantity},(_,i)=>prepareItem(row,i+1,config,result.warnings)));
-  const grouped=compareLayouts(items,max,!!config.mirrored,balanceProfile(config.pmcBalance));
+  const items=rows.flatMap(row=>Array.from({length:row.quantity},(_,i)=>prepareItem(row,i+1,config,result.warnings,strategy)));
+  const alternate=strategyOrder(strategy,item=>item.row);
+  const grouped=compareLayouts(alternate?[...items].sort(alternate):items,max,!!config.mirrored,balanceProfile(config.pmcBalance));
   const placed=new Map();
   result.pallets=grouped.pallets.map((pallet,index)=>{
     const parts=pallet.boxes.map(({item,lockX,lockY,...placement})=>{
