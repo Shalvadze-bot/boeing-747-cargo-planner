@@ -17,7 +17,7 @@ export function ViewSwitch({ view, onChange, label='Plan görünümü' }) {
   </div>;
 }
 
-function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, heightCut=Infinity, placementAction }) {
+function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, heightCut=Infinity, placementAction, researchViolationIds=[] }) {
   const indices = pallet == null ? result.pallets.map(p => p.index) : [pallet];
   const items = result.placements.filter(p => p.z < heightCut && (pallet == null ||
     p.palletIndex === pallet || p.touchedPallets?.includes(pallet)));
@@ -45,7 +45,8 @@ function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, h
         aria-label={item.name+', '+item.id} onClick={()=>onItem(item.id)} onKeyDown={event=>activate(event,()=>onItem(item.id))}>
         <rect x={item.x} y={item.y} width={item.w} height={item.l} rx={1.5}
           fill={item.color||'#6288a6'} fillOpacity={item.id===itemId?0.98:0.68}
-          stroke={item.id===itemId?'#ffe09a':'#101923'} strokeWidth={item.id===itemId?2.5:1}/>
+          data-research-violation={researchViolationIds.includes(item.id)?'true':undefined}
+          stroke={researchViolationIds.includes(item.id)?'#ff7272':item.id===itemId?'#ffe09a':'#101923'} strokeWidth={researchViolationIds.includes(item.id)||item.id===itemId?2.5:1}/>
         {labels && <text x={item.x+item.w/2} y={item.y+item.l/2} textAnchor="middle" fill="#09131e"
           fontWeight={700} fontSize={Math.min(7,item.w/8,item.l/4)} pointerEvents="none">{item.id}</text>}
       </g>)}
@@ -99,7 +100,7 @@ export function PmcPlacementDetails({ result, pallet, itemId, onItem }) {
 export function PmcPlanView({ view,result,pallet,itemId,onItem,onPallet,...options }) {
   return view==='2D' ? <PmcFloorView result={result} pallet={pallet} itemId={itemId}
     onItem={onItem} onPallet={onPallet} labels={options.labels} heightCut={options.heightCut}
-    placementAction={options.placementAction}/> :
+    placementAction={options.placementAction} researchViolationIds={options.researchViolationIds}/> :
     <PmcScene placements={result.placements} palletCount={Math.max(1,result.pallets.length)} selectedPallet={pallet}
       selectedItemId={itemId} onSelectItem={onItem} onSelectPallet={onPallet}
       mirrorContour={!!result.config?.mirrored} {...options}/>;

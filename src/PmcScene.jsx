@@ -24,7 +24,7 @@ function cuboid(x, y, z, w, l, h) {
   ];
 }
 
-export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, onSelectPallet, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity }) {
+export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, onSelectPallet, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity, researchViolationIds = [] }) {
   const [moveMode,setMoveMode]=useState(false);
   const [xDraft,setXDraft]=useState('');
   const moveOrigins=useRef({});
@@ -136,7 +136,7 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
         <desc id={`${id}-desc`}>Döndürmek için sürükleyin. Bir yükü seçmek için tıklayın veya Tab ve Enter kullanın. Sarı şeritler dört yandaki 8,5 cm / yaklaşık 3,35 inç boşluğu gösterir. Planlama simülasyonudur.</desc>
         <defs><radialGradient id={`${id}-ground`}><stop offset="0" stopColor="#263a55" stopOpacity=".55"/><stop offset="1" stopColor="#142137" stopOpacity="0"/></radialGradient><marker id={`${id}-arrow`} viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 8 0 L 0 4 L 8 8" fill="none" stroke="#8195b1" strokeWidth="1.2"/></marker></defs>
         <ellipse cx="450" cy="378" rx="355" ry="115" fill={`url(#${id}-ground)`}/>
-        {sorted.map(f=><polygon key={f.key} data-item-id={f.item?.id} data-pmc-index={f.pallet} points={pts(f.p)} fill={shade(f.color,f.light)} fillOpacity={f.item && selectedPallet!=null && f.item.palletIndex!==selectedPallet ? .84 : 1} stroke={f.item?.id===selectedItemId?'#fff3ae':f.item?'#0e1728':f.margin?'#f3c75d':'#9aabc1'} strokeWidth={f.item?.id===selectedItemId?2.3:f.margin ? .5 : .8} strokeLinejoin="round" onClick={f.item?()=>select(f.item):undefined} className={f.item?'pmc-scene-box':undefined}><title>{f.item?`${f.item.name} · ${f.item.id} · ${fmt(f.item.w)} × ${fmt(f.item.l)} × ${fmt(f.item.h)} cm`:f.margin?'8,5 cm / ≈3,35″ kenar boşluğu':'PMC taban plakası'}</title></polygon>)}
+        {sorted.map(f=><polygon key={f.key} data-item-id={f.item?.id} data-pmc-index={f.pallet} points={pts(f.p)} fill={shade(f.color,f.light)} fillOpacity={f.item && selectedPallet!=null && f.item.palletIndex!==selectedPallet ? .84 : 1} data-research-violation={researchViolationIds.includes(f.item?.id)?'true':undefined} stroke={researchViolationIds.includes(f.item?.id)?'#ff7272':f.item?.id===selectedItemId?'#fff3ae':f.item?'#0e1728':f.margin?'#f3c75d':'#9aabc1'} strokeWidth={researchViolationIds.includes(f.item?.id)||f.item?.id===selectedItemId?2.3:f.margin ? .5 : .8} strokeLinejoin="round" onClick={f.item?()=>select(f.item):undefined} className={f.item?'pmc-scene-box':undefined}><title>{f.item?`${f.item.name} · ${f.item.id} · ${fmt(f.item.w)} × ${fmt(f.item.l)} × ${fmt(f.item.h)} cm`:f.margin?'8,5 cm / ≈3,35″ kenar boşluğu':'PMC taban plakası'}</title></polygon>)}
         {showContour && indices.map(i=>{
           const contour = [[0,0],[0,H],[100.33,H],[W,104.14],[W,0]].map(([x,z])=>[mirrorContour?W-x:x,z]);
           return <g key={`contour-${i}`} className="pmc-scene-contour">{[i*L,(i+1)*L].map((y,k)=><polyline key={k} points={pts(contour.map(([x,z])=>point(x,y,z)))} />)}{contour.slice(1,4).map(([x,z],j)=> <g key={j}>{line(point(x,i*L,z),point(x,(i+1)*L,z),{strokeDasharray:'5 5'})}</g>)}</g>;

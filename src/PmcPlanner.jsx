@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Cube, Plus, Trash, MagicWand, DownloadSimple, Warning, Info, ArrowCounterClockwise, CheckCircle, X } from '@phosphor-icons/react';
 import { DEFAULT_CONFIG, SAMPLE_CARGO, PMC, contourHeight } from './pmc-engine.mjs';
 import { PmcPlanView, PmcPlacementDetails, ViewSwitch } from './PmcPlanView';
@@ -7,6 +7,8 @@ import LongCargoDetails from './LongCargoDetails';
 import PmcLongBalanceSettings from './PmcLongBalanceSettings';
 import {preparePmcTransfer} from './pmc-aircraft.mjs';
 import './pmc-planner.css';
+import PmcGeometryPanel from './PmcGeometryPanel';
+import { assessResearchPlan, DEFAULT_RESEARCH_SETTINGS } from './pmc-research-review.mjs';
 import './ai-packing.css';
 import { STRATEGY_NAMES } from './pmc-search-strategies.mjs';
 import { measuredEngine, packingSignature, unmarkedConfig, useAiPacking } from './use-ai-packing.mjs';
@@ -98,10 +100,12 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
   const [showDimensions, setShowDimensions] = useState(true);
   const [heightCut, setHeightCut] = useState(244);
   const [resetOpen, setResetOpen] = useState(false);
+  const [researchSettings,setResearchSettings] = useState(DEFAULT_RESEARCH_SETTINGS);
   const worker = useRef(null);
   const timeout = useRef(null);
   const currentSignature = signature(rows, config);
   const stale = !!result && resultSignature !== currentSignature;
+  const researchAssessment = useMemo(()=>assessResearchPlan({rows,result,stale,busy,settings:researchSettings}),[rows,result,stale,busy,researchSettings]);
   const lastPmc = history.pmc[0];
   const previousOutdated = lastPmc && lastPmc.cargoKey !== cargoKey(rows);
   const previousModeChanged = lastPmc && !!lastPmc.config?.longCargo !== !!config.longCargo;
@@ -367,7 +371,7 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
 
   return <section className="pmc-planner" aria-label="PMC üç boyutlu paletleme">
     <div className="pmc-intro">
-      <div><span className="pmc-eyebrow">PALET İÇİ YERLEŞİM / ZX-11</span><h2>Her parçayı görün. Alanı değerlendirin.</h2><p>Yük ölçülerini girin, paletlere dağıtımı büyük ve döndürülebilir 3D görünümde inceleyin.</p></div>
+      <div><span className="pmc-eyebrow">A330-243F / PMC · ZX-11 SİMÜLASYON</span><h2>Her parçayı görün. Alanı değerlendirin.</h2><p>Yük ölçülerini girin, paletlere dağıtımı büyük ve döndürülebilir 3D görünümde inceleyin.</p></div>
       <div className="pmc-base-stat"><span>NET YÜKLENEBİLİR TABAN</span><strong>226,84 <b>×</b> 300,5 <small>cm</small></strong><small>≈89,31 × 118,31 inç net taban</small><small>96 × 125 inç / 243,84 × 317,5 cm PMC</small><small>Her kenardan 8,5 cm / ≈3,35 inç çıkarıldı</small></div>
     </div>
     <div className="pmc-layout">
@@ -435,6 +439,7 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
           {stale && <div className="pmc-stale" role="status"><Warning size={17}/> Girdiler değişti. Görünüm önceki hesaplamayı gösteriyor; yeniden yerleştirin.</div>}
           <div className="pmc-results-stats"><div><span>{configForResult.longCargo?'Fiziksel PMC':'Kullanılan palet'}</span><strong>{palletCount}<small> PMC</small></strong></div><div><span>Yerleşen parça</span><strong>{placements.length}<small> / {result?.summary?.requestedCount ?? totalRequested}</small></strong></div><div><span>Yerleşen hacim</span><strong>{format(volume, 2)}<small> m³</small></strong></div><div title="Net taban üzerindeki ZX-11 geometrik zarfına oran. Kenar boşluklarına taşan hacim dahil değildir."><span>Geometrik zarf doluluğu</span><strong>{configForResult.longCargo ? '—' : format(utilization, 1)}<small>%</small></strong></div><div><span>{configForResult.longCargo?'Kenar taşması':'Üst taşma'}</span><strong className={overhangs.length ? 'pmc-amber-text' : ''}>{overhangs.length}<small> inceleme</small></strong></div></div>
           {onImportAircraft && !configForResult.longCargo && <div className="pmc-aircraft-transfer"><button className="outline amber" disabled={!result || stale || busy || !!result.errors?.length || !placements.length} onClick={openTransfer}>Uçak paletlerine ekle</button><p>Renkli yükler uçak 3D görünümüne kopyalanır. Mevcut yükler korunur; sonraki PMC düzenlemeleri kopyayı değiştirmez.</p></div>}
+          <PmcGeometryPanel assessment={researchAssessment} settings={researchSettings} onSetting={(key,value)=>setResearchSettings(old=>({...old,[key]:value}))} onItem={chooseItem}/>
           <div className="pmc-pallet-select" aria-label="Görüntülenecek palet"><button className={selectedPallet === null ? 'active' : ''} disabled={!!configForResult.longCargo} onClick={() => { setSelectedPallet(null); setSelectedItemId(null); }}>Tüm paletler</button>{(result?.pallets || []).map(pallet => <button key={pallet.index} className={selectedPallet === pallet.index ? 'active' : ''} onClick={() => { setSelectedPallet(pallet.index); setSelectedItemId(null); }}><Cube size={17}/><span>PMC {String(pallet.index + 1).padStart(2, '0')}<small>{pallet.items.length} parça teması</small></span></button>)}</div>
           <div className="pmc-plan-tools">
             <ViewSwitch view={planView} onChange={setPlanView} label="PMC 2D / 3D görünümü"/>
@@ -451,14 +456,14 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
             pallet={selectedPallet} itemId={selectedItemId} onItem={chooseItem} onPallet={choosePallet}
             placementAction={viewOnly ? undefined : <>{placeButton}<AiPackingButton ai={ai} disabled={actionBlocked} showObjective={false}
               onStart={() => { void ai.start(); aiPanel.current?.scrollIntoView({block:'start'}); }}/></>} onMoveCargo={!viewOnly && result.config?.longCargo && !stale && !busy ? moveCargo : undefined}
-            showContour={showContour} labels={labels} showDimensions={showDimensions} heightCut={heightCut === 244 ? Infinity : heightCut}/> : <div className="pmc-loading"><Cube size={48}/><p>{busy ? 'Paletler hazırlanıyor…' : 'Yüklerinizi girip yerleşimi hesaplayın.'}</p></div>}
+            showContour={showContour} labels={labels} showDimensions={showDimensions} heightCut={heightCut === 244 ? Infinity : heightCut} researchViolationIds={researchAssessment.violationIds}/> : <div className="pmc-loading"><Cube size={48}/><p>{busy ? 'Paletler hazırlanıyor…' : 'Yüklerinizi girip yerleşimi hesaplayın.'}</p></div>}
           {result && <PmcPlacementDetails result={result} pallet={selectedPallet} itemId={selectedItemId} onItem={chooseItem}/>}
           <div className="pmc-color-legend">{[...new Map(placements.map(item => [item.rowId, item])).values()].map(item => <span key={item.rowId}><i style={{background:item.color}}/>{item.name}</span>)}</div>
           {result?.config?.longCargo && <LongCargoDetails pallets={result.pallets.filter(pallet => selectedPallet === null || pallet.index === selectedPallet)}/>}
           {result && <div className="pmc-geometry-note"><Info size={17}/><p>Sezgisel geometrik arama; en iyi çözüm garantisi yoktur. Hacim, paketlerin dış ölçülerinden hesaplanır. Doluluk, net taban üzerindeki ZX-11 zarfına oranlanır; kenar boşluklarındaki taşma hacmi hariçtir. Bu görünüm uçuşa uygunluk veya operasyon onayı değildir.</p></div>}
         </section>
         {result?.unplaced?.length > 0 && <section className="panel pmc-unplaced"><h3><Warning size={19}/> Yerleşemeyen parçalar</h3><ul>{result.unplaced.map((item, i) => <li key={`${item.id}-${i}`}><b>{item.name || item.id}</b>{item.quantity ? ` (${item.quantity} adet)` : ''}: {item.reason}</li>)}</ul></section>}
-        {result && <details className="panel pmc-details"><summary>Yerleşim listesi ve kontrol notları ({visibleItems.length} parça)</summary><div className="pmc-table-scroll"><table><thead><tr><th>Parça</th><th>Palet</th><th>Ölçü (G × U × Y), cm</th><th>Konum (x, y, z), cm</th><th>Durum</th></tr></thead><tbody>{visibleItems.map(item => <tr key={item.id} className={selectedItemId === item.id ? 'pmc-selected-row' : ''}><td><button className="text-btn" onClick={() => setSelectedItemId(item.id)}><i className="pmc-small-dot" style={{background:item.color}}/>{item.name} · {item.id}</button></td><td>{item.touchedPallets?.map(index => `PMC ${index + 1}`).join(' + ') || `PMC ${item.palletIndex + 1}`}</td><td>{[item.w,item.l,item.h].map(n => format(n)).join(' × ')}</td><td>{[item.x,item.y-item.palletIndex*317.5,item.z].map(n => format(n)).join(', ')}</td><td>{item.status==='TECHNICAL_VALIDATION_PENDING' ? 'Teknik doğrulama bekliyor' : item.overhangCm > 0 ? `${format(item.overhangCm)} cm taşma · İncele` : 'Kontur içinde'}</td></tr>)}</tbody></table></div><p className="pmc-coordinates">x: fiziksel plakanın sol kenarından; y: ana paletin ön kenarından; z: plaka üstünden. Konumlar köşe koordinatlarıdır.</p><ul className="pmc-warning-list">{(result.warnings || []).map((item, i) => <li key={i}>{typeof item === 'string' ? item : item.message || JSON.stringify(item)}</li>)}</ul></details>}
+        {result && <details className="panel pmc-details"><summary>Yerleşim listesi ve kontrol notları ({visibleItems.length} parça)</summary><div className="pmc-table-scroll"><table><thead><tr><th>Parça</th><th>Palet</th><th>Ölçü (G × U × Y), cm</th><th>Konum (x, y, z), cm</th><th>Durum</th></tr></thead><tbody>{visibleItems.map(item => <tr key={item.id} className={selectedItemId === item.id ? 'pmc-selected-row' : ''}><td><button className="text-btn" onClick={() => setSelectedItemId(item.id)}><i className="pmc-small-dot" style={{background:item.color}}/>{item.name} · {item.id}</button></td><td>{item.touchedPallets?.map(index => `PMC ${index + 1}`).join(' + ') || `PMC ${item.palletIndex + 1}`}</td><td>{[item.w,item.l,item.h].map(n => format(n)).join(' × ')}</td><td>{[item.x,item.y-item.palletIndex*317.5,item.z].map(n => format(n)).join(', ')}</td><td>{item.status==='TECHNICAL_VALIDATION_PENDING' ? 'Teknik doğrulama bekliyor' : item.overhangCm > 0 ? `${format(item.overhangCm)} cm taşma · İncele` : 'ZX-11 konturu içinde'}{researchAssessment.violationIds.includes(item.id)&&<small className="pmc-research-fail"> · Contour 1 ihlali</small>}</td></tr>)}</tbody></table></div><p className="pmc-coordinates">x: fiziksel plakanın sol kenarından; y: ana paletin ön kenarından; z: plaka üstünden. Konumlar köşe koordinatlarıdır.</p><ul className="pmc-warning-list">{(result.warnings || []).map((item, i) => <li key={i}>{typeof item === 'string' ? item : item.message || JSON.stringify(item)}</li>)}</ul></details>}
         <div className="pmc-bottom"><span><CheckCircle size={16}/> Mevcut uçak yerleşim planınız ayrı olarak korunur.</span><button className="text-btn" disabled={viewOnly} onClick={() => setResetOpen(true)}><ArrowCounterClockwise size={16}/> Örnek yükleri getir</button></div>
       </div>
     </div>

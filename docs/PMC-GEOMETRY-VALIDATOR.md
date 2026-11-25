@@ -18,3 +18,9 @@ const assessment = validatePmcGeometry(fromLegacyPmcPlan(rows, result, model));
 Test: `node --test tests/pmc-geometry-validator.test.mjs`. Sentetik örnekler kullanılır; müşteri sevkiyat verisi bu herkese açık depoya eklenmemiştir.
 
 Gerçek net taban, kontur datumları, paket izinleri, clearance, ağırlık merkezi, floor/running load, destek/ezilme dayanımı, restraint ve kapı geçişi için ilgili kontrollü belgeler ve uzman doğrulaması gerekir. Bu modül bir optimizer değildir; palet sayısının optimumluğunu kanıtlamaz.
+
+## Arayüz entegrasyonu (araştırma)
+
+A330-243F / PMC planının güncel sonucunda ayrı Geometry Validator paneli otomatik çalışır. ZX-11 optimizer ve ana çizim korunur; Contour 1 araştırma kontrolünde ihlali olan parçalar 2D/3D görünümde kırmızı kenarla belirtilir. Eski veya hesaplanan plan için UNKNOWN gösterilir; önceki ihlaller temizlenir. Aralık ve yatay/dikey datum değerleri yalnızca araştırma kontrolünü değiştirir, kalıcı kayıt ve optimizer etkilenmez. Uzun yük, taşma ve istif desteği bu sürümde doğrulanmaz. Operasyonel durum daima UNKNOWN.
+
+Ek test: `node --test tests/pmc-geometry-integration.test.mjs`.

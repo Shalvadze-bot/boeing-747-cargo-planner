@@ -33,3 +33,20 @@
 .pmc-balance-groups legend{padding:0 5px;color:#d9e3ef;font-size:13px}
 .pmc-balance-groups label{display:grid;gap:5px;color:#c5d0de;font-size:13px}
 .pmc-balance-groups input{width:100%;min-width:0}
+
+/* Independent A330 research review. Keep the existing ZX-11 renderer/optimizer unchanged. */
+.pmc-research-validator{margin:12px 18px 4px;padding:12px;border:1px solid #3a495d;border-radius:8px;background:#101b29;color:#b5c4d4;font-size:11px;line-height:1.55;min-width:0;overflow-wrap:anywhere}
+.pmc-research-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pmc-research-heading h3{font-size:14px;color:#e5ecf3;margin:0}
+.pmc-research-validator p{margin:5px 0}
+.pmc-research-notice{color:#ffce73;font-weight:600}
+.pmc-research-status{font-size:13px;letter-spacing:.5px}
+.pmc-research-pass{color:#71d7a7}.pmc-research-fail{color:#ff9292}.pmc-research-unknown{color:#ffce73}
+.pmc-research-details{border-top:1px solid #324158;margin-top:8px;padding-top:8px}
+.pmc-research-details summary{cursor:pointer;color:#ffce73}
+.pmc-research-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px;margin:8px 0}
+.pmc-research-fields input{box-sizing:border-box}
+.pmc-research-issues{max-height:180px;overflow:auto;margin:6px 0;padding-left:20px}
+.pmc-research-issues button{margin-right:5px;max-width:100%;overflow-wrap:anywhere;white-space:normal}
+.pmc-research-details a{color:#ffce73}
+@media(max-width:600px){.pmc-research-validator{margin:8px 10px;padding:9px}}
