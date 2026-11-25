@@ -1,13 +1,15 @@
 // Independent research geometry. All numeric lengths are millimetres.
 // Do not use as operational loading approval.
 
+const PMC_LENGTH_MM = 125 * 25.4;
+
 export function makeResearchModel(overrides = {}) {
   return {
     id: 'avianca-a330-200f-contour-1-research-v1',
     units: 'mm',
     authority: 'research-only',
     source: 'https://www.aviancacargo.com/downloads/oversize_eng.pdf#page=4',
-    nominal: {widthMm: 2438.4, lengthMm: 3175},
+    nominal: {widthMm: 96 * 25.4, lengthMm: PMC_LENGTH_MM},
     usable: {xMm: 85, yMm: 85, widthMm: 2268.4, lengthMm: 3005},
     contour: {
       // Coordinates are high-side to low-side. The origin at the usable high edge
@@ -37,6 +39,7 @@ export function validatePmcGeometry({items, placements, unplacedIds = [], model}
   const seen = new Set();
   const boxes = [];
   const groups = new Map();
+  let placementAccountingOK = true;
   let minVerticalMarginMm = null;
   const missing = v => v === undefined || v === null;
   const report = () => {
@@ -46,7 +49,7 @@ export function validatePmcGeometry({items, placements, unplacedIds = [], model}
       operationalStatus:'UNKNOWN', operationalApproval:false,
       complete: Array.isArray(items) && itemMap.size === items.length && itemMap.size > 0 &&
         seen.size === itemMap.size && Array.isArray(unplacedIds) && unplacedIds.length === 0 &&
-        boxes.length === itemMap.size && !issues.some(i=>i.status==='FAIL'),
+        boxes.length === itemMap.size && placementAccountingOK,
       placedCount:boxes.length, unplacedCount:Array.isArray(unplacedIds)?unplacedIds.length:null,
       palletCount:groups.size, minVerticalMarginMm, issues,
       limitations:['Research contour and footprint are not approved aircraft or operator limits.',
@@ -106,7 +109,8 @@ export function validatePmcGeometry({items, placements, unplacedIds = [], model}
   }
   for (const p of placements) {
     if (!p || !validId(p.id) || !itemMap.has(p.id) || seen.has(p.id)) {
-      add('FAIL','UNKNOWN_OR_DUPLICATE_PLACEMENT',p?.id?[p.id]:[]); continue;
+      placementAccountingOK = false;
+      add('FAIL','UNKNOWN_OR_DUPLICATE_PLACEMENT',validId(p?.id)?[p.id]:[]); continue;
     }
     seen.add(p.id);
     if (!Number.isSafeInteger(p.palletIndex) || p.palletIndex<0 ||
@@ -157,6 +161,9 @@ export function validatePmcGeometry({items, placements, unplacedIds = [], model}
     else seen.add(id);
   }
   for (const id of itemMap.keys()) if(!seen.has(id)) add('FAIL','ITEM_NOT_ACCOUNTED_FOR',[id]);
+  if (!boxes.length && unplacedIds.length === itemMap.size && issues.every(i=>i.status!=='FAIL')) {
+    add('UNKNOWN','NO_PLACED_ITEMS');
+  }
   for (const group of groups.values()) {
     for(let i=0;i<group.length;i++)for(let j=i+1;j<group.length;j++){
       const a=group[i],b=group[j];
@@ -172,23 +179,33 @@ export function validatePmcGeometry({items, placements, unplacedIds = [], model}
   return report();
 }
 
+function rowNumber(value) {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())) return NaN;
+  return Number(value);
+}
+
+const legacyMm = value => typeof value === 'number' ? value * 10 : NaN;
+
 export function fromLegacyPmcPlan(rows, result, model) {
   // Existing optimizer uses cm measured from physical pallet front/left, with
   // a global longitudinal coordinate. This adapter never infers permissions.
   if (!Array.isArray(rows) || !Array.isArray(result?.placements) ||
       !Array.isArray(result?.unplaced) || !model?.nominal || !model?.usable ||
       result.errors?.length) throw new TypeError('Explicit model and valid optimizer input/output required');
-  if (result.config?.longCargo || result.placements.some(p=>p.touchedPallets?.length>1 || p.overhangCm>0))
+  if (result.config?.longCargo || result.placements.some(p=>p?.touchedPallets?.length>1 || p?.overhangCm>0))
     throw new RangeError('Multi-position and long cargo are outside PMC Geometry Validator V1');
   if (typeof result.config?.mirrored !== 'boolean' || result.config.mirrored!==model.contour?.mirrored)
     throw new RangeError('Explicit matching mirrored orientation required');
   const items=[], byId=new Map();
   for (const r of rows) {
-    if (!Number.isSafeInteger(r.quantity)||r.quantity<1||r.quantity>200||typeof r.id!=='string')
+    const quantity = rowNumber(r?.quantity);
+    if (!Number.isSafeInteger(quantity)||quantity<1||items.length+quantity>200||typeof r?.id!=='string'||!r.id.trim())
       throw new TypeError('Invalid source row');
-    for(let i=1;i<=r.quantity;i++){
+    const [widthMm,lengthMm,heightMm] = ['width','length','height'].map(key=>rowNumber(r[key])*10);
+    for(let i=1;i<=quantity;i++){
       const id=`${r.id}:${i}`;
-      const item={id,widthMm:r.width*10,lengthMm:r.length*10,heightMm:r.height*10};
+      const item={id,widthMm,lengthMm,heightMm};
       const mode=r.pieceOrientations?.[i]??r.orientationMode;
       // A missing rotation permission stays unknown. The research check supports
       // only upright dimensions, even when a source permits other faces.
@@ -198,14 +215,20 @@ export function fromLegacyPmcPlan(rows, result, model) {
     }
   }
   const placements=result.placements.map(p=>{
+    if (!p || typeof p !== 'object') return null;
     const i=byId.get(p.id);
-    let orientation=null;
+    let orientation=p.orientationFace && p.orientationFace!=='upright' ? `legacy:${p.orientationFace}` : null;
     if(p.orientationFace==='upright'&&i){
-      orientation=Math.abs(p.w*10-i.widthMm)<=0.000001&&Math.abs(p.l*10-i.lengthMm)<=0.000001?'yaw0':'yaw90';
+      const originalDimensions = Math.abs(legacyMm(p.w)-i.widthMm)<=1e-6 && Math.abs(legacyMm(p.l)-i.lengthMm)<=1e-6;
+      orientation = (typeof p.rotated==='boolean' ? p.rotated : !originalDimensions) ? 'yaw90' : 'yaw0';
     }
-    return {id:p.id,palletIndex:p.palletIndex,uMm:p.x*10-model.usable.xMm,
-      vMm:p.y*10-p.palletIndex*model.nominal.lengthMm-model.usable.yMm,zMm:p.z*10,
-      widthMm:p.w*10,lengthMm:p.l*10,heightMm:p.h*10,orientation};
+    // Legacy global y always advances by the physical 125-inch PMC length.
+    const palletIndex = p.touchedPallets === undefined ||
+      (Array.isArray(p.touchedPallets) && p.touchedPallets.length === 1 && p.touchedPallets[0] === p.palletIndex)
+      ? p.palletIndex : NaN;
+    return {id:p.id,palletIndex,uMm:legacyMm(p.x)-model.usable.xMm,
+      vMm:legacyMm(p.y)-palletIndex*PMC_LENGTH_MM-model.usable.yMm,zMm:legacyMm(p.z),
+      widthMm:legacyMm(p.w),lengthMm:legacyMm(p.l),heightMm:legacyMm(p.h),orientation};
   });
-  return {items,placements,unplacedIds:result.unplaced.map(p=>p.id),model};
+  return {items,placements,unplacedIds:result.unplaced.map(p=>p?.id),model};
 }
