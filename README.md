@@ -33,6 +33,8 @@ npm run dev
 
 Terminalde gösterilen yerel adresi açın. Bulut proje akışı, ChatGPT oturum kimliğini Sites worker üzerinden aldığı için yayımlanan Sites ortamında çalışır.
 
+Yerel proje ve paketleme akışını sentetik yüklerle incelemek için `npm run build` ardından `npm run preview:ai` çalıştırın. `http://127.0.0.1:4178/` adresindeki örnek projeyi açıp **PMC · 3D paletleme** ekranına geçin. **Yerleşim yöntemi** menüsünden Standart · ZX-11 veya V2 · Avianca Contour 1 seçilebilir. [V2 mimarisi ve ölçümler](docs/PMC-PACKING-OPTIMIZER-V2.md)
+
 Sites worker, Supabase `cargo-sites` fonksiyonuna bağlanır. Worker ortamında `.env.example` dosyasındaki değişkenleri ayarlayın. `CARGO_WORKER_TOKEN` değerinin SHA-256 özeti, Supabase geçişi uygulandıktan sonra `cargo_sites_private.worker_credential` tablosuna kaydedilir. Fonksiyon, Supabase'in sunucu tarafındaki kimlik bilgilerini kullanır.
 
 ## Derleme ve kontroller

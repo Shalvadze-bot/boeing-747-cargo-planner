@@ -87,14 +87,16 @@ function* candidatePoints(grids,z){
   for(const x of xs)for(const g of active)if(g.xs.has(x))yield {x,y,z,w:g.w,l:g.l,h:g.h,face:g.face};
  }
 }
-function pack(items,c,strategy){
+function pack(items,c,strategy,comparison){
  const placements=[],unplaced=[];let allocated=0;
+ const gap=comparison?.gapCm??0;
+ const roof=comparison?.roofHeightCm??contourHeight;
  for(const item of items){
  let chosen=null;
- for(let p=0;p<c.maxPallets&&!chosen;p++){
+ for(let p=0;p<c.maxPallets&&!chosen&&!comparison?.exhausted;p++){
   const start=p*PMC.length+PMC.margin,end=(p+1)*PMC.length-PMC.margin;
   const local=placements.filter(b=>b.touchedPallets.includes(p));
-  const supports=local.filter(b=>b.stackable&&b.palletIndex===p);
+  const supports=comparison?[]:local.filter(b=>b.stackable&&b.palletIndex===p);
   const levels=unique([0,...supports.map(b=>b.z+b.h)]).sort((a,b)=>a-b);
   // Try low levels first, then front/left positions. At each level, combine
   // support and obstacle edges rather than anchoring only to one carton.
@@ -106,21 +108,25 @@ function pack(items,c,strategy){
    const rowBlockers=new Map(),rowSupports=new Map();
    const grids=[];
    for(const [w,l,h,face] of strategyOrientations(orientations(item),strategy)){
-    const xs=unique([PMC.margin,PMC.width-PMC.margin-w,...edges.flatMap(b=>z===0?[b.x+b.w,b.x-w]:[b.x,b.x+b.w-w,b.x+b.w,b.x-w])])
+    const xs=unique([PMC.margin,PMC.width-PMC.margin-w,...edges.flatMap(b=>z===0?[b.x+b.w+gap,b.x-w-gap]:[b.x,b.x+b.w-w,b.x+b.w,b.x-w])])
      .filter(x=>between(PMC.margin,x)&&between(x+w,PMC.width-PMC.margin));
-    const ys=unique([start,end-l,...edges.flatMap(b=>z===0?[b.y+b.l,b.y-l]:[b.y,b.y+b.l-l,b.y+b.l,b.y-l])])
+    const ys=unique([start,end-l,...edges.flatMap(b=>z===0?[b.y+b.l+gap,b.y-l-gap]:[b.y,b.y+b.l-l,b.y+b.l,b.y-l])])
      .filter(y=>between(start,y)&&(c.allowOverhang||between(y+l,end)));
     grids.push({w,l,h,face,xs:new Set(xs),ys:new Set(ys)});
    }
    // Walk ordered coordinates lazily: allocating and sorting every x/y pair
    // is costly for the supported 200-piece mixed-dimension workload.
    for(const a of candidatePoints(grids,z)){
-    if(!between(a.z+a.h,Math.min(contourHeight(a.x,c.mirrored),contourHeight(a.x+a.w,c.mirrored))))continue;
+    if(comparison){
+     if(comparison.checked>=comparison.limit){comparison.exhausted=true;break;}
+     comparison.checked++;
+    }
+    if(!between(a.z+a.h,Math.min(roof(a.x,c.mirrored),roof(a.x+a.w,c.mirrored))))continue;
     // Most edge combinations are occupied. Reject them before the more
     // expensive union-of-supports calculation, using every neighboring box.
     const rowKey=`${a.y}:${a.l}:${a.h}`;
-    if(!rowBlockers.has(rowKey))rowBlockers.set(rowKey,local.filter(b=>b.z<a.z+a.h-EPS&&b.z+b.h>a.z+EPS&&a.y<b.y+b.l-EPS&&a.y+a.l>b.y+EPS));
-    if(rowBlockers.get(rowKey).some(b=>a.x<b.x+b.w-EPS&&a.x+a.w>b.x+EPS))continue;
+    if(!rowBlockers.has(rowKey))rowBlockers.set(rowKey,local.filter(b=>b.z<a.z+a.h-EPS&&b.z+b.h>a.z+EPS&&a.y<b.y+b.l+gap-EPS&&a.y+a.l>b.y-gap+EPS));
+    if(rowBlockers.get(rowKey).some(b=>a.x<b.x+b.w+gap-EPS&&a.x+a.w>b.x-gap+EPS))continue;
     const overhang=Math.max(0,a.y+a.l-end);let touched=[p],supportIds=[];
     if(overhang>EPS){
      if(!c.allowOverhang||a.z<c.minOverhangHeightCm-EPS||overhang>c.maxOverhangCm+EPS||p+1>=c.maxPallets)continue;
@@ -144,7 +150,7 @@ function pack(items,c,strategy){
    }
   }
  }
- if(chosen){placements.push(chosen);allocated=Math.max(allocated,...chosen.touchedPallets.map(p=>p+1));}
+ if(chosen){if(comparison)comparison.accepted++;placements.push(chosen);allocated=Math.max(allocated,...chosen.touchedPallets.map(p=>p+1));}
  else unplaced.push({id:item.instanceId,rowId:item.id,name:item.name,quantity:1,reason:'Kontur, taban, destek veya palet sınırları içinde bu sezgisel sırada yer bulunamadı; imkânsızlık kanıtı değildir.'});
  }
  return {placements,unplaced,allocated};
@@ -154,18 +160,37 @@ function pack(items,c,strategy){
  * Pallet volume metrics clip incoming/outgoing overhang at physical deck boundaries;
  * weight is NOT apportioned to pallets: structural load distribution is unknown.
  */
-export function runPacking(inputRows,config={},strategy){
+export function runPacking(inputRows,config={},strategy,matchResearch){
  const invalidConfig=config===null||typeof config!=='object'||Array.isArray(config);
  const {errors,c,rows}=validate(inputRows,invalidConfig?{}:config);
  if(invalidConfig)errors.push('Ayarlar bir nesne olmalı.');
  const warnings=['SIMÜLASYON: ZX-11 görseli sertifikalı limit değildir. Uçak uyumu, ağırlık merkezi, dayanım, sabitleme ve operatör onayı ayrıca doğrulanmalıdır.','Sezgisel yerleşim: en az palet sayısı veya en iyi yerleşim garanti edilmez.','Palet taşıma kapasitesi ve taban yükü limiti uygulanmaz; ağırlık yalnızca bilgilendirme toplamıdır.','Üst üste yerleşimde aynı yükseklikteki bir veya birden fazla istiflenebilir kutunun ortak yüzeyi tam taban desteği sağlamalıdır. Bu yalnızca geometrik destektir; ezilme dayanımı ve yük taşıma kapasitesi hesaplanmaz.'];
  const result={config:c,profile:{...PROFILE,mirrored:c.mirrored},errors,warnings,placements:[],pallets:[],unplaced:[],summary:{requestedCount:0,placedCount:0,unplacedCount:0,palletCount:0,volumeM3:0,knownWeightKg:0,unknownWeightCount:0,overhangCount:0}};
+ // Opt-in benchmark policy. Interactive ZX-11 retains its original defaults.
+ let comparison;
+ if(matchResearch){
+  const {roofHeightCm,gapCm,candidateLimit}=matchResearch;
+  if(typeof roofHeightCm!=='function'||!Number.isFinite(gapCm)||gapCm<0||
+      !Number.isSafeInteger(candidateLimit)||candidateLimit<1||c.allowOverhang||c.longCargo){
+   errors.push('Araştırma karşılaştırma ayarları geçersiz.');
+  }else{
+   comparison={roofHeightCm,gapCm,limit:candidateLimit,checked:0,accepted:0,exhausted:false};
+   result.profile={name:'Avianca Contour 1',status:'Karşılaştırma · araştırma geometrisi',mirrored:c.mirrored};
+   result.warnings=['SİMÜLASYON — Tek kat araştırma karşılaştırması. Operasyon onayı yok.'];
+  }
+ }
  if(errors.length)return result;
- const items=rows.flatMap(r=>Array.from({length:r.quantity},(_,i)=>({...r,orientationMode:r.pieceOrientations?.[i+1]??r.orientationMode??'upright',instanceId:`${r.id}:${i+1}`})));
+ const items=rows.flatMap(r=>Array.from({length:r.quantity},(_,i)=>({...r,orientationMode:comparison?'upright':r.pieceOrientations?.[i+1]??r.orientationMode??'upright',instanceId:`${r.id}:${i+1}`})));
  const orders=[(a,b)=>b.length*b.width*b.height-a.length*a.width*a.height,(a,b)=>b.height-a.height||b.width*b.length-a.width*a.length,(a,b)=>b.width*b.length-a.width*a.length||b.height-a.height];
  let best=null;
  const alternate=strategyOrder(strategy);
- for(const sort of alternate?[alternate]:orders){const run=pack([...items].sort(sort),c,strategy);if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;}
+ for(const sort of alternate?[alternate]:orders){
+  const run=pack([...items].sort(sort),c,strategy,comparison);
+  if(!best||run.unplaced.length<best.unplaced.length||(run.unplaced.length===best.unplaced.length&&run.allocated<best.allocated))best=run;
+  if(comparison?.exhausted)break;
+ }
+ if(comparison)result.comparison={candidateLimit:comparison.limit,generatedCandidates:comparison.checked,
+  rejectedCandidates:comparison.checked-comparison.accepted,budgetExhausted:comparison.exhausted};
  const {placements,unplaced,allocated}=best;result.placements=placements;result.unplaced=unplaced;
  result.pallets=Array.from({length:allocated},(_,index)=>{const parts=placements.filter(b=>b.touchedPallets.includes(index));return {index,items:parts,metrics:{itemCount:parts.length,originatingCount:parts.filter(b=>b.palletIndex===index).length,maxHeight:Math.max(0,...parts.map(b=>b.z+b.h)),volumeM3:parts.reduce((s,b)=>s+b.w*b.h*Math.max(0,Math.min(b.y+b.l,(index+1)*PMC.length)-Math.max(b.y,index*PMC.length))/1e6,0),reviewRequired:parts.some(b=>b.reviewRequired)}};});
  result.summary={requestedCount:items.length,placedCount:placements.length,unplacedCount:unplaced.length,palletCount:allocated,volumeM3:placements.reduce((s,b)=>s+b.w*b.l*b.h/1e6,0),knownWeightKg:placements.reduce((s,b)=>s+(b.weight??0),0),unknownWeightCount:placements.filter(b=>b.weight===null).length,overhangCount:placements.filter(b=>b.reviewRequired).length};

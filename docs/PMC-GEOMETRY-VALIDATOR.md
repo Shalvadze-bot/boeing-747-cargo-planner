@@ -1,13 +1,13 @@
 # PMC Geometry Validator V1 — araştırma prototipi
 
-Bu bağımsız modül mevcut ZX-11 optimizer'ı veya UI'yı değiştirmez. Uçuş/yükleme onayı vermez. Avianca A330-200F Contour 1, s. 4: https://www.aviancacargo.com/downloads/oversize_eng.pdf#page=4 (operatör broşürü; hedef A330-243F'ye uygulanabilirlik doğrulanmamıştır). PMC nominal ölçüsü: https://www.air-cargo-products.de/pmc-pallet-96-x-125.html.
+Bağımsız modül, araştırma geometrisini değerlendirir. Kaynak broşür, Avianca'nın A330-200F Contour 1 kesitini tanımlar. Hedef A330-243F ve operatör için uygulanabilirlik doğrulanmadı. [Avianca Cargo, s. 4](https://www.aviancacargo.com/downloads/oversize_eng.pdf#page=4) · [Nominal PMC ölçüsü](https://www.air-cargo-products.de/pmc-pallet-96-x-125.html)
 
 - Nominal PMC: 3175 × 2438,4 mm; araştırma net tabanı 3005 × 2268,4 mm (her kenarda 85 mm varsayımı).
 - Kesit (x,z) inç: (0,0),(0,96),(38,96),(74,72),(92,37),(92,0). Yatay datum: yüksek kenardan 34,2 mm; dikey datum 0 mm varsayımı; y boyunca sabit kesit varsayımı. `mirrored` yüksek kenarı tersine çevirir.
 - Girdi: ayrı kimlikli fiziksel birimler (`widthMm,lengthMm,heightMm,allowedOrientations`), yerel kullanılabilir taban koordinatları (`uMm,vMm,zMm`), sıfır tabanlı `palletIndex`, açık `yaw0/yaw90` yönü, yerleşen boyutlar ve `unplacedIds`. Tüm uzunluklar mm. İzinler veri olarak verilmelidir. Üst üste yerleşim destek analizi V1 kapsamı dışındadır.
 - `minHorizontalGapMm` dikey izdüşümleri örtüşen paketler için yatay çalışma aralığı; `numericalToleranceMm` sadece sayısal hata (0–0,01 mm), operasyonel tolerans değil.
-- `PASS`: verilen araştırma geometrisinde yerleştirilen parçalar geçerli. `complete`: her beklenen parça yerleşmiş; açıkça yerleşmeyenler varsa false. `FAIL`: bilinen ihlal veya hatalı veri. `UNKNOWN`: gerekli veri/izin veya kapsam eksik. `operationalStatus` daima UNKNOWN.
-- `fromLegacyPmcPlan(rows,result,model)` mevcut optimizer'ın fiziksel taban başlangıcından ölçülen cm ve global y koordinatlarını yerel mm'ye dönüştürür; uzun yük/çoklu pozisyon aktarımı desteklenmez. Araştırma konturu ve eski ZX-11 farklıdır; eski optimizer sonucu yeni modelde FAIL olabilir. Otomatik UI veya optimizer değişikliği yok.
+- `PASS`, ölçülen yerleşen parçaların araştırma geometrisine uyduğunu gösterir. `complete` tüm beklenen parçaların yerleşip yerleşmediğini bildirir. `FAIL` bilinen geometri veya veri kusurunu gösterir. `UNKNOWN` girdi, kapsam veya ölçülecek yerleşim eksikliğini gösterir. `operationalStatus` daima UNKNOWN.
+- `fromLegacyPmcPlan(rows,result,model)` fiziksel taban başlangıcından ölçülen cm ve global Y koordinatlarını yerel mm'ye dönüştürür. Metin olarak saklanmış ondalık ölçü ve adetleri açıkça ayrıştırır. Uzun yük ve çoklu pozisyon sonucu bu aktarımın kapsamı dışındadır.
 
 ```js
 import {makeResearchModel, validatePmcGeometry, fromLegacyPmcPlan} from './src/pmc-geometry-validator.mjs';
@@ -21,6 +21,6 @@ Gerçek net taban, kontur datumları, paket izinleri, clearance, ağırlık merk
 
 ## Arayüz entegrasyonu (araştırma)
 
-A330-243F / PMC planının güncel sonucunda ayrı Geometry Validator paneli otomatik çalışır. ZX-11 optimizer ve ana çizim korunur; Contour 1 araştırma kontrolünde ihlali olan parçalar 2D/3D görünümde kırmızı kenarla belirtilir. Eski veya hesaplanan plan için UNKNOWN gösterilir; önceki ihlaller temizlenir. Aralık ve yatay/dikey datum değerleri yalnızca araştırma kontrolünü değiştirir, kalıcı kayıt ve optimizer etkilenmez. Uzun yük, taşma ve istif desteği bu sürümde doğrulanmaz. Operasyonel durum daima UNKNOWN.
+A330-243F PMC planının güncel sonucunda Geometry Validator paneli otomatik çalışır. Standart mod ZX-11 ile yerleştirir ve çizer. Contour 1 kontrolü ayrı çalışır ve 2D ile 3D çizimlerde ihlalleri kırmızı kenarla gösterir. V2 motoru yerleştirme, çizim ve doğrulama için aynı Contour 1 modelini kullanır. Eski, hesaplanan ve geri yüklenen planlarda panel UNKNOWN gösterir ve eski işaretleri kaldırır. Datumlar ve paket aralığı standart modda araştırma kontrolüne, V2'de ise yeniden hesaplamaya girer. JSON dışa aktarımı kullanılan araştırma modeli, ayarlar ve sonucu içerir. [V2 mimarisi ve karşılaştırma](PMC-PACKING-OPTIMIZER-V2.md)
 
 Ek test: `node --test tests/pmc-geometry-integration.test.mjs`.

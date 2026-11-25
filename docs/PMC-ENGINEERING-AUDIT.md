@@ -46,3 +46,10 @@ Merkezli Contour 1'de 10 PMC alt sınırı için olası beşli düzen 3+2 olmal�
 ### Veri seti 002
 
 Araştırma kayıtlarında 50 paket grubu, 201 iç ürün ve 45.305,5 kg kayıtlı brüt kütle belirtiliyor. Kaynak çalışma kitabı yerel erişilebilir dosyalarda bulunamadı. Kayıt, paket 20/50 için brütün netten düşük olduğunu bildiriyor. Kaynak hücreleri, formül ve önbellek bağımsız doğrulanamadığı için iki kütle de düzeltilmiş kabul edilmedi. Hiyerarşi ve ağırlık tutarlılığı için sentetik grup kullanılmalıdır.
+
+## Faz 3 ve 4 · V2 ve son doğrulama
+
+- `VITE_BASE_PATH=/boeing-747-cargo-planner/ npm run build` başarılı. Vite süresi 3,48 saniye. `node --test tests/*.test.mjs` 173/173 başarılı, 17,48 saniye. `npm run build` yerel önizleme köküyle başarılı, 3,34 saniye. Mevcut paket boyutu uyarısı iki derlemede de görüldü.
+- Tarayıcıda 39 parçalı yerel kopya Standart ile açıldı, V2'ye geçildi ve paket aralığı 2,5 mm yapıldı. Ayar değişikliği UNKNOWN, yeniden hesaplama PASS verdi. 2D görünüm dört çatı izdüşümü çizgisi, 3D görünüm Avianca Contour 1 kesiti gösterdi. Sayfa yeniden açıldığında V2, 2,5 mm, 39/39 ve 143,33 mm korundu.
+- 1440 × 900 ve 390 × 844 ekranlar kaydedildi. V2'de mobil belge genişliği 390 pikseldi. Doğrulanan senaryoda tarayıcı hatası veya uyarısı görülmedi.
+- Yöntemler aynı geometriyle tekrar çalıştırıldı. Birim, palet, açıklık, süre, bellek, kullanım, artık dikdörtgen ve aday sayılarına ilişkin ölçümler [V2 karşılaştırma raporunda](PMC-PACKING-OPTIMIZER-V2.md) yer alır.

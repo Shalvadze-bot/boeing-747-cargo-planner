@@ -56,8 +56,9 @@ function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, h
           fontWeight={700} fontSize={Math.min(7,item.w/8,item.l/4)} pointerEvents="none">{item.id}</text>}
       </g>)}
     </svg>
-    <span>{result.researchModel ? 'Kesikli mavi çizgiler Contour 1 çatısının taban izdüşümünü gösterir.' :
-      'Üst üste parçaları aşağıdaki parça listesinden de seçebilirsin.'}</span>
+    {result.researchModel ?
+      projection.length>0&&<span>Kesikli mavi çizgiler Contour 1 çatısının taban izdüşümünü gösterir.</span> :
+      <span>Üst üste parçaları aşağıdaki parça listesinden de seçebilirsin.</span>}
   </div>;
 }
 

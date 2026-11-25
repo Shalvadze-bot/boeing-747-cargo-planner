@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { runContourPacking } from '../src/pmc-contour-optimizer.mjs';
 import { assessResearchPlan, DEFAULT_RESEARCH_SETTINGS, recheckContourSnapshot } from '../src/pmc-research-review.mjs';
 import { researchSectionCm } from '../src/pmc-contour-space.mjs';
@@ -106,4 +107,18 @@ test('restored positions are checked against the same datum, mirror and pallet m
   const shifted=runContourPacking(rows,{...result.config,researchSettings:{...settings,verticalMm:'5'}});
   const shiftedSection=researchSectionCm(shifted.researchModel);
   assert.ok(shiftedSection.every(([x,z],i)=>x===section[i][0]&&Math.abs(section[i][1]-z-.5)<1e-8));
+});
+
+test('the reproducible benchmark compares both engines on the same synthetic inputs', () => {
+  const results=JSON.parse(execFileSync(process.execPath,['scripts/benchmark-pmc.mjs','--runs','1'],{encoding:'utf8'}));
+  assert.deepEqual(results.syntheticPackageHierarchy,{packages:50,internalPieces:201,
+    disputedGrossCount:1,disputedGrossUsedAsWeight:false});
+  const [legacy,v2]=results.engines;
+  assert.deepEqual([legacy.engine,v2.engine],['legacy','v2']);
+  for(const engine of [legacy,v2]){
+    const [exact,heavy]=engine.results;
+    assert.deepEqual([exact.gapMm,exact.placed,exact.pmcs,exact.validation],[5,5,2,'PASS']);
+    assert.deepEqual([heavy.gapMm,heavy.placed,heavy.validation],[2.5,50,'PASS']);
+    assert.ok(engine.results.every(row=>row.reproducible&&row.generatedCandidates<=results.candidateLimit));
+  }
 });
