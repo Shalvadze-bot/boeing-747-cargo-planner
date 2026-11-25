@@ -1,6 +1,19 @@
-import {makeResearchModel,validatePmcGeometry,fromLegacyPmcPlan} from './pmc-geometry-validator.mjs';
+import {makeResearchModel,validatePmcGeometry,fromLegacyPmcPlan,readPmcDecimal} from './pmc-geometry-validator.mjs';
 
 export const DEFAULT_RESEARCH_SETTINGS = Object.freeze({gapMm:'0',offsetMm:'34.2',verticalMm:'0'});
+export const RESEARCH_PROFILE_LABEL = 'Avianca Contour 1';
+export const CONTOUR_OPTIMIZER = 'contour-v2';
+
+export function researchModelFor(config, settings = DEFAULT_RESEARCH_SETTINGS) {
+  const [gap,offset,vertical] = ['gapMm','offsetMm','verticalMm'].map(key=>readPmcDecimal(settings?.[key]));
+  const maxPallets = readPmcDecimal(config?.maxPallets);
+  if (![gap,offset,vertical].every(value=>Number.isFinite(value)&&value>=0) ||
+      !Number.isSafeInteger(maxPallets) || maxPallets<1 || maxPallets>30 ||
+      typeof config?.mirrored!=='boolean') return null;
+  const base = makeResearchModel();
+  return makeResearchModel({minHorizontalGapMm:gap,maxPallets,
+    contour:{...base.contour,highEdgeOffsetMm:offset,verticalOffsetMm:vertical,mirrored:config.mirrored}});
+}
 
 export function assessResearchPlan({rows,result,stale=false,busy=false,settings}={}) {
   const pending=(phase,message)=>({phase,status:'UNKNOWN',message,report:null,model:null,violationIds:[],placedIds:[]});
@@ -14,16 +27,8 @@ export function assessResearchPlan({rows,result,stale=false,busy=false,settings}
   if(result.config.longCargo || result.placements.some(p=>p?.overhangCm>0||p?.touchedPallets?.length>1))
     return pending('unsupported','Uzun yük ve komşu palet taşması V1 kapsamı dışında.');
   if(!result.placements.length)return pending('empty','Yerleşmiş parça yok; geometrik uygunluk gösterilemez.');
-  const number=value=>{
-    if((typeof value!=='number'&&typeof value!=='string') || (typeof value==='string'&&!value.trim()))return null;
-    const n=Number(value);
-    return Number.isFinite(n)&&n>=0?n:null;
-  };
-  const gap=number(settings?.gapMm),offset=number(settings?.offsetMm),vertical=number(settings?.verticalMm);
-  if([gap,offset,vertical].some(v=>v===null))return pending('settings','Araştırma girdileri sıfır veya pozitif sayılar olmalı.');
-  const base=makeResearchModel();
-  const model=makeResearchModel({minHorizontalGapMm:gap,maxPallets:result.config.maxPallets,
-    contour:{...base.contour,highEdgeOffsetMm:offset,verticalOffsetMm:vertical,mirrored:result.config.mirrored}});
+  const model=researchModelFor(result.config,settings);
+  if(!model)return pending('settings','Araştırma girdileri sıfır veya pozitif sayılar olmalı.');
   let report;
   try {
     report=validatePmcGeometry(fromLegacyPmcPlan(rows,result,model));

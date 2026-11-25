@@ -179,7 +179,7 @@ export function validatePmcGeometry({items, placements, unplacedIds = [], model}
   return report();
 }
 
-function rowNumber(value) {
+export function readPmcDecimal(value) {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())) return NaN;
   return Number(value);
@@ -199,10 +199,10 @@ export function fromLegacyPmcPlan(rows, result, model) {
     throw new RangeError('Explicit matching mirrored orientation required');
   const items=[], byId=new Map();
   for (const r of rows) {
-    const quantity = rowNumber(r?.quantity);
+    const quantity = readPmcDecimal(r?.quantity);
     if (!Number.isSafeInteger(quantity)||quantity<1||items.length+quantity>200||typeof r?.id!=='string'||!r.id.trim())
       throw new TypeError('Invalid source row');
-    const [widthMm,lengthMm,heightMm] = ['width','length','height'].map(key=>rowNumber(r[key])*10);
+    const [widthMm,lengthMm,heightMm] = ['width','length','height'].map(key=>readPmcDecimal(r[key])*10);
     for(let i=1;i<=quantity;i++){
       const id=`${r.id}:${i}`;
       const item={id,widthMm,lengthMm,heightMm};
