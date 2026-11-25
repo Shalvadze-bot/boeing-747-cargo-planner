@@ -16,7 +16,7 @@ const issueLabels = {
 };
 const fmt = n => Number.isFinite(n) ? n.toLocaleString('tr-TR',{maximumFractionDigits:2})+' mm' : '—';
 
-export default function PmcGeometryPanel({assessment,settings,onSetting,onItem}) {
+export default function PmcGeometryPanel({assessment,settings,onSetting,onItem,usesContour=false,displayedProfile='ZX-11',settingsReadOnly=false}) {
   const {report,status,phase,message,violationIds,placedIds}=assessment;
   const fails=report?.issues.filter(i=>i.status==='FAIL').length ?? 0;
   const unknowns=report?.issues.filter(i=>i.status==='UNKNOWN').length ?? 0;
@@ -25,7 +25,7 @@ export default function PmcGeometryPanel({assessment,settings,onSetting,onItem})
       <div><h3>A330-243F · Geometry Validator V1</h3><p>Avianca A330-200F Contour 1 · ana güverte araştırma referansı</p></div>
       <strong className={'pmc-research-status pmc-research-'+status.toLowerCase()} aria-live="polite">{status}</strong>
     </div>
-    <p>Yerleşim motoru ve ana çizim <b>ZX-11</b> modelini kullanır. Bağımsız kontrol <b>Avianca Contour 1</b> modelini kullanır.</p>
+    <p>Çizilen plan <b>{displayedProfile}</b> modelini kullanır. Bağımsız kontrol <b>Avianca Contour 1</b> modelini kullanır.</p>
     <p className="pmc-research-notice">SİMÜLASYON — Operasyon onayı yok. Hedef operatöre uygulanabilirlik doğrulanmadı.</p>
     {phase==='checked' ? <>
       <p aria-live="polite">{report.placedCount} yerleşen · {report.unplacedCount} yerleşmeyen · {violationIds.length} işaretli parça · {fails} ihlal / {unknowns} belirsizlik</p>
@@ -40,9 +40,9 @@ export default function PmcGeometryPanel({assessment,settings,onSetting,onItem})
           ['gapMm','Paket aralığı (mm)'],
           ['offsetMm','Yüksek kenar datumu (mm)'],
           ['verticalMm','Dikey datum (mm)']
-        ].map(([key,label])=><label key={key}>{label}<input aria-label={'Araştırma '+label} type="number" min="0" step="0.1" value={settings[key]} onChange={e=>onSetting(key,e.target.value)}/></label>)}
+        ].map(([key,label])=><label key={key}>{label}<input aria-label={'Araştırma '+label} type="number" min="0" step="0.1" value={settings[key]} disabled={settingsReadOnly} onChange={e=>onSetting(key,e.target.value)}/></label>)}
       </div>
-      <p>Bu ayarlar yalnızca doğrulamayı değiştirir, yerleşimi yeniden hesaplamaz ve gerçek çalışma boşluğu anlamına gelmez. Ayna yönü mevcut plandan alınır.</p>
+      <p>{usesContour ? 'V2 motoru, çizim ve doğrulama aynı araştırma ayarlarını kullanır. Değişiklikten sonra planı yeniden hesaplayın.' : 'Bu ayarlar araştırma kontrolünü değiştirir. ZX-11 yerleşimi aynı kalır.'}</p>
       {report?.issues.length>0 && <ul className="pmc-research-issues">{report.issues.slice(0,50).map((issue,index)=><li key={index}>
         <b>{issue.status}:</b> {issueLabels[issue.code]||issue.code}
         {Number.isFinite(issue.verticalMarginMm)&&' · '+fmt(issue.verticalMarginMm)}

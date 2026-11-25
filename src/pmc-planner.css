@@ -39,6 +39,7 @@
 .pmc-table-scroll{position:relative}
 .pmc-research-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pmc-research-heading h3{font-size:14px;color:#e5ecf3;margin:0}
+.pmc-optimizer-status{margin:12px 18px 4px;color:#b5c4d4;font-size:12px;line-height:1.5}
 .pmc-research-validator p{margin:5px 0}
 .pmc-research-notice{color:#ffce73;font-weight:600}
 .pmc-research-status{font-size:13px;letter-spacing:.5px}

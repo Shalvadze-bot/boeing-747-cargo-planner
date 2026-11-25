@@ -83,3 +83,16 @@ export function researchEnvelopeMm3({usable,contour}) {
   }
   return area*usable.lengthMm;
 }
+
+// Project the contour into the physical pallet's centimetre frame for both
+// views. Clip to the displayed deck and to the pallet top at Z=0.
+export function researchSectionCm({usable,nominal,contour}) {
+  const {points,highEdgeOffsetMm:offset,verticalOffsetMm:datum,mirrored} = contour;
+  const x = physical => offset + (mirrored ? usable.xMm+usable.widthMm-physical : physical-usable.xMm);
+  const origin = x(0), end=x(nominal.widthMm);
+  const lo=Math.max(0,Math.min(origin,end)), hi=Math.min(lastXAtHeight(points,datum),Math.max(origin,end));
+  if(lo>=hi) return [];
+  const relevant=[lo,...points.map(([u])=>u).filter(u=>u>lo&&u<hi),hi];
+  return relevant.map(u=>[Math.max(0,Math.min(nominal.widthMm,mirrored?origin-u:u-origin))/10,
+    Math.max(0,contourRoof(points,u)-datum)/10]);
+}

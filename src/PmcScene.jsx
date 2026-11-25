@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import './pmc-scene.css';
 import {lateralBounds} from './pmc-long-cargo.mjs';
 import {PMC,contourHeight} from './pmc-engine.mjs';
+import {researchSectionCm} from './pmc-contour-space.mjs';
+import {RESEARCH_PROFILE_LABEL} from './pmc-research-review.mjs';
 
 const {width:W,length:L,maxHeight:H,margin:M,shoulderX,lowHeight} = PMC;
 const ISO = { yaw: -0.66, pitch: 0.48 };
@@ -24,7 +26,7 @@ function cuboid(x, y, z, w, l, h) {
   ];
 }
 
-export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, onSelectPallet, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity, researchViolationIds = [] }) {
+export default function PmcScene({ placementAction, onMoveCargo, placements = [], palletCount = 1, selectedPallet = null, selectedItemId, onSelectItem, onSelectPallet, mirrorContour = false, showContour = true, labels = true, showDimensions = true, heightCut = Infinity, researchViolationIds = [], researchModel }) {
   const [moveMode,setMoveMode]=useState(false);
   const [xDraft,setXDraft]=useState('');
   const moveOrigins=useRef({});
@@ -85,6 +87,10 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
   // Labels follow the same mirrored physical contour, not the inset base.
   const highX=mirrorContour?W:0, shoulder=mirrorContour?W-shoulderX:shoulderX, lowX=mirrorContour?0:W;
   const highDimX=highX+(mirrorContour?18:-18), lowDimX=lowX+(mirrorContour?-22:22);
+  const profileLabel=researchModel?RESEARCH_PROFILE_LABEL:'ZX-11';
+  const roof=researchModel?researchSectionCm(researchModel):
+    [[0,H],[shoulderX,H],[W,lowHeight]].map(([x,z])=>[mirrorContour?W-x:x,z]);
+  const section=roof.length?[[roof[0][0],0],...roof,[roof.at(-1)[0],0]]:[];
   return <section className="pmc-scene" aria-label="Üç boyutlu PMC yük yerleşimi">
     <div className="pmc-scene-toolbar">
       <div className="pmc-scene-actions">
@@ -132,15 +138,15 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
         onPointerUp={e=>{if(!moved.current && drag.current?.itemId)onSelectItem?.(drag.current.itemId);
           else if(!moved.current && drag.current?.palletId != null)onSelectPallet?.(Number(drag.current.palletId));drag.current=null;setDragging(false);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
         onPointerCancel={()=>{drag.current=null;setDragging(false);}}>
-        <title id={`${id}-title`}>PMC paleti: 96 × 125 inç / 243,84 × 317,5 cm, ZX-11 konturu</title>
+        <title id={`${id}-title`}>{`PMC paleti: 96 × 125 inç / 243,84 × 317,5 cm, ${profileLabel} konturu`}</title>
         <desc id={`${id}-desc`}>Döndürmek için sürükleyin. Bir yükü seçmek için tıklayın veya Tab ve Enter kullanın. Sarı şeritler dört yandaki 8,5 cm / yaklaşık 3,35 inç boşluğu gösterir. Planlama simülasyonudur.</desc>
         <defs><radialGradient id={`${id}-ground`}><stop offset="0" stopColor="#263a55" stopOpacity=".55"/><stop offset="1" stopColor="#142137" stopOpacity="0"/></radialGradient><marker id={`${id}-arrow`} viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 8 0 L 0 4 L 8 8" fill="none" stroke="#8195b1" strokeWidth="1.2"/></marker></defs>
         <ellipse cx="450" cy="378" rx="355" ry="115" fill={`url(#${id}-ground)`}/>
         {sorted.map(f=><polygon key={f.key} data-item-id={f.item?.id} data-pmc-index={f.pallet} points={pts(f.p)} fill={shade(f.color,f.light)} fillOpacity={f.item && selectedPallet!=null && f.item.palletIndex!==selectedPallet ? .84 : 1} data-research-violation={researchViolationIds.includes(f.item?.id)?'true':undefined} stroke={researchViolationIds.includes(f.item?.id)?'#ff7272':f.item?.id===selectedItemId?'#fff3ae':f.item?'#0e1728':f.margin?'#f3c75d':'#9aabc1'} strokeWidth={researchViolationIds.includes(f.item?.id)||f.item?.id===selectedItemId?2.3:f.margin ? .5 : .8} strokeLinejoin="round" onClick={f.item?()=>select(f.item):undefined} className={f.item?'pmc-scene-box':undefined}><title>{f.item?`${f.item.name} · ${f.item.id} · ${fmt(f.item.w)} × ${fmt(f.item.l)} × ${fmt(f.item.h)} cm`:f.margin?'8,5 cm / ≈3,35″ kenar boşluğu':'PMC taban plakası'}</title></polygon>)}
-        {showContour && indices.map(i=>{
-          const contour = [[0,0],[0,H],[shoulderX,H],[W,lowHeight],[W,0]].map(([x,z])=>[mirrorContour?W-x:x,z]);
-          return <g key={`contour-${i}`} className="pmc-scene-contour">{[i*L,(i+1)*L].map((y,k)=><polyline key={k} points={pts(contour.map(([x,z])=>point(x,y,z)))} />)}{contour.slice(1,4).map(([x,z],j)=> <g key={j}>{line(point(x,i*L,z),point(x,(i+1)*L,z),{strokeDasharray:'5 5'})}</g>)}</g>;
-        })}
+        {showContour && section.length>0 && indices.map(i=><g key={`contour-${i}`} className="pmc-scene-contour" data-contour-profile={profileLabel}>
+          {[i*L,(i+1)*L].map((y,k)=><polyline key={k} points={pts(section.map(([x,z])=>point(x,y,z)))}/>)}
+          {roof.map(([x,z],j)=><g key={j}>{line(point(x,i*L,z),point(x,(i+1)*L,z),{strokeDasharray:'5 5'})}</g>)}
+        </g>)}
         {indices.map(i=>{const p=project(point(W/2,i*L+L/2,-7));return <g key={`label-${i}`} className="pmc-scene-pallet-label"><text x={p[0]} y={p[1]+26} textAnchor="middle">PMC {String(i+1).padStart(2,'0')}</text></g>;})}
         {visible.filter(p=>p.z<heightCut).map(item=>{const p=project(point(item.x+item.w/2,item.y+item.l/2,item.z+Math.min(item.h,heightCut-item.z)));return <g key={`select-${item.id}`} data-item-id={item.id} role="button" tabIndex={0} aria-label={`${item.name}, ${item.id}, ${fmt(item.w)} × ${fmt(item.l)} × ${fmt(item.h)} santimetre. Seç.`} aria-pressed={selectedItemId===item.id} className="pmc-scene-item-label" onClick={()=>select(item)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelectItem?.(item.id);}}} transform={`translate(${p[0]},${p[1]})`}><circle r="15" fill="transparent"/>{labels && <><rect x="-29" y="-12" width="58" height="22" rx="5" fill="#0a1427" fillOpacity=".84" stroke={selectedItemId===item.id?'#f5ca56':'#f8fafc'} strokeOpacity=".25"/><text textAnchor="middle" y="3">{String(item.id).length>9?String(item.id).slice(-9):item.id}</text></>}</g>;})}
         {visible.filter(b=>b.overhang).flatMap(b=>{const base=b.palletIndex*L, o=b.overhang, t=(edge,n)=>`${edge} ${fmt(n)} cm / ${fmt(n/2.54)}″`;return [
@@ -151,8 +157,8 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
         ];})}
         {dimension(point(0,first*L-24),point(W,first*L-24),'96″ / 243,84 cm · X','dim-x')}
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}
-        {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'Yüksek kenar\n96″ / 243,84 cm · Z','dim-z')}
-        {showContour && camera.pitch<1.4 && <>
+        {!researchModel && camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'Yüksek kenar\n96″ / 243,84 cm · Z','dim-z')}
+        {!researchModel && showContour && camera.pitch<1.4 && <>
           {dimension(point(highX,first*L-24,H+14),point(shoulder,first*L-24,H+14),'Düz üst\n39,5″ / 100,33 cm','dim-flat')}
           {dimension(point(lowDimX,first*L-24,0),point(lowDimX,first*L-24,lowHeight),'Alçak kenar\n41″ / 104,14 cm','dim-low')}
         </>}
@@ -160,7 +166,7 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
       </svg>
       <div className="pmc-scene-hint">{moveMode && onMoveCargo?'↔ Yükü sürükleyerek yatay taşı · Kamera sabit':'↔ Sürükleyerek döndür · Yüke tıklayarak incele'}</div>
     </div>
-    <div className="pmc-scene-legend"><span><i style={{background:'#e5ad36'}}/> 8,5 cm / ≈3,35″ kenar boşluğu</span><span><i className="wire"/> ZX-11 konturu</span><span>Kullanılabilir taban: 226,84 × 300,5 cm / ≈89,31 × 118,31″</span><span>1 inç = 2,54 cm · ≈ yuvarlanmış dönüşüm</span></div>
+    <div className="pmc-scene-legend"><span><i style={{background:'#e5ad36'}}/> 8,5 cm / ≈3,35″ kenar boşluğu</span><span><i className="wire"/> {profileLabel} konturu</span><span>Kullanılabilir taban: 226,84 × 300,5 cm / ≈89,31 × 118,31″</span><span>1 inç = 2,54 cm · ≈ yuvarlanmış dönüşüm</span></div>
     {selected && <div className="pmc-scene-selection" aria-live="polite"><div><i style={{background:selected.color}}/><strong>{selected.name}</strong><span>{selected.id}</span></div><div><b>{fmt(selected.w)} × {fmt(selected.l)} × {fmt(selected.h)} cm</b><span>X {fmt(selected.x)} · Y {fmt(selected.y)} · Z {fmt(selected.z)} cm</span></div><div><span>{(selected.touchedPallets?.length?selected.touchedPallets:[selected.palletIndex]).map(i=>`PMC ${i+1}`).join(' + ')}</span>{selected.overhangCm>0 && <b className="pmc-scene-overhang">{fmt(selected.overhangCm)} cm taşma</b>}</div></div>}
     {selectedPallet!=null && visible.some(p=>p.palletIndex!==selectedPallet || p.y<selectedPallet*L || p.y+p.l>(selectedPallet+1)*L) && <p className="pmc-scene-note">Komşu palete taşan yükler tam boylarıyla gösterilir. Plaka dışındaki bölüm kullanılabilir taban değildir.</p>}
   </section>;

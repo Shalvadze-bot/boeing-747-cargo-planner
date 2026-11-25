@@ -3,19 +3,25 @@ import { toAiManifest, measuredEngine, unmarkedConfig } from './use-ai-packing.m
 import { STRATEGY_NAMES } from './pmc-search-strategies.mjs';
 import { sortAlternatives } from './pmc-plan-options.mjs';
 import { samePieceSet } from './pmc-chat-search.mjs';
+import { CONTOUR_OPTIMIZER, RESEARCH_PROFILE_LABEL, researchModelFor } from './pmc-research-review.mjs';
 
 export function pmcContext({rows,config,result,stale,selectedItemId,selectedPallet,outcome}) {
   const selected = result?.placements.find(item=>item.id===selectedItemId);
+  const contour=config.optimizer===CONTOUR_OPTIMIZER;
+  const model=contour?researchModelFor(config,config.researchSettings):null;
+  const profile=contour?{name:RESEARCH_PROFILE_LABEL,researchModel:model,longCargo:false,maxPallets:Number(config.maxPallets)}:
+    {width:PMC.width,length:PMC.length,edgeCm:PMC.margin,maxHeight:PMC.maxHeight,
+      shoulderX:PMC.shoulderX,lowHeight:PMC.lowHeight,mirrored:!!config.mirrored,longCargo:!!config.longCargo,maxPallets:Number(config.maxPallets)};
   return {
-    profile:{width:PMC.width,length:PMC.length,edgeCm:PMC.margin,maxHeight:PMC.maxHeight,
-      shoulderX:PMC.shoulderX,lowHeight:PMC.lowHeight,mirrored:!!config.mirrored,longCargo:!!config.longCargo,maxPallets:Number(config.maxPallets)},
+    profile,
     manifest:toAiManifest(rows).map((values,i)=>[rows[i].id,rows[i].name,...values]),
     manifestColumns:'reference, name, length cm, width cm, height cm, quantity, kg per piece, orientation code, rotate allowed, support allowed, stack kg, per-piece orientation overrides',
     placementColumns:'reference, PMC (1-based), X cm, Y cm (global), Z cm, width cm, length cm, height cm, face, support ids',
     placements:!stale?result?.placements.map(p=>[p.id,p.palletIndex+1,p.x,p.y,p.z,p.w,p.l,p.h,p.orientationFace,p.supportIds]):null,
     selection:{pallet:selectedPallet==null?null:selectedPallet+1,reference:selected?.id??null,name:selected?.name??null},
     unplaced:!stale?result?.unplaced.map(item=>[item.id,item.reason]):null,
-    validation:!stale&&result?{engineErrors:result.errors??[],warnings:result.warnings??[],independent:outcome?.current?.validation?.valid??null}:null,
+    validation:!stale&&result?{engineErrors:result.errors??[],warnings:result.warnings??[],
+      independent:contour?(result.validation?.status??null):(outcome?.current?.validation?.valid??null)}:null,
     alternatives:outcome?.alternatives.map((item,i)=>[i,item.validation.stats,item.elapsedMs])??[],
     stale:!!stale,
   };

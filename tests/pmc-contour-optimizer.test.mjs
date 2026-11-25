@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runContourPacking } from '../src/pmc-contour-optimizer.mjs';
-import { assessResearchPlan, DEFAULT_RESEARCH_SETTINGS } from '../src/pmc-research-review.mjs';
+import { assessResearchPlan, DEFAULT_RESEARCH_SETTINGS, recheckContourSnapshot } from '../src/pmc-research-review.mjs';
+import { researchSectionCm } from '../src/pmc-contour-space.mjs';
 
 const row = (overrides={}) => ({id:'case',name:'Sentetik kasa',quantity:1,
   width:113,length:150,height:90,allowRotation:false,stackable:false,...overrides});
@@ -86,4 +87,23 @@ test('mixed synthetic placements are reproducible for mirrored profiles and mult
     assert.equal(a.summary.placedCount+a.summary.unplacedCount,rows.length);
   }
   assert.equal(JSON.stringify(rows),snapshot);
+});
+
+test('restored positions are checked against the same datum, mirror and pallet membership', () => {
+  const rows=[row({quantity:4})], settings=withGap('5');
+  const result=runContourPacking(rows,{...config,researchSettings:settings});
+  assert.equal(recheckContourSnapshot(rows,result.config,result).validation.valid,true);
+  assert.equal(recheckContourSnapshot(rows,{...result.config,mirrored:true},result).validation.valid,false);
+  const altered=structuredClone(result);
+  altered.placements[0].z=80;
+  assert.equal(recheckContourSnapshot(rows,result.config,altered).validation.valid,false);
+  const missing=structuredClone(result);
+  missing.pallets[0].items.pop();
+  assert.equal(recheckContourSnapshot(rows,result.config,missing).validation.valid,false);
+
+  const section=researchSectionCm(result.researchModel);
+  assert.ok(section.some(([x,z])=>Math.abs(x-101.6)<1e-8&&Math.abs(z-243.84)<1e-8));
+  const shifted=runContourPacking(rows,{...result.config,researchSettings:{...settings,verticalMm:'5'}});
+  const shiftedSection=researchSectionCm(shifted.researchModel);
+  assert.ok(shiftedSection.every(([x,z],i)=>x===section[i][0]&&Math.abs(section[i][1]-z-.5)<1e-8));
 });

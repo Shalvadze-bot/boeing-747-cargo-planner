@@ -39,3 +39,28 @@ export function assessResearchPlan({rows,result,stale=false,busy=false,settings}
   const violationIds=[...new Set(report.issues.filter(i=>i.status==='FAIL').flatMap(i=>i.ids).filter(id=>placed.has(id)))];
   return {phase:'checked',status:report.status,model,report,violationIds,placedIds:[...placed],message:null};
 }
+
+export function recheckContourSnapshot(rows,config,baseline) {
+  const invalid = message => ({result:baseline,validation:{valid:false,errors:[message]}});
+  const model=researchModelFor(config,config.researchSettings);
+  if(!model || baseline?.optimizer?.id!==CONTOUR_OPTIMIZER ||
+      JSON.stringify(baseline.researchModel)!==JSON.stringify(model)) {
+    return invalid('V2 planının araştırma ayarları güncel ayarlarla eşleşmiyor.');
+  }
+  const result={...baseline,config:{...baseline.config,...config}};
+  const assessment=assessResearchPlan({rows,result,settings:config.researchSettings??DEFAULT_RESEARCH_SETTINGS});
+  if(assessment.status!=='PASS') return invalid(assessment.message||'V2 planı bağımsız geometri kontrolünden geçmedi.');
+  if(!Array.isArray(result.pallets)||result.pallets.length!==assessment.report.palletCount) {
+    return invalid('V2 planında palet listesi ve yerleşimler eşleşmiyor.');
+  }
+  const pallets=[];
+  for(const [index,pallet] of result.pallets.entries()){
+    const items=result.placements.filter(box=>box.palletIndex===index);
+    if(pallet?.index!==index || !items.length || !Array.isArray(pallet.items) ||
+        pallet.items.length!==items.length || items.some((box,i)=>box.id!==pallet.items[i]?.id)) {
+      return invalid('V2 planında palet listesi ve yerleşimler eşleşmiyor.');
+    }
+    pallets.push({...pallet,items});
+  }
+  return {result:{...result,pallets,validation:assessment.report},validation:{valid:true,errors:[]}};
+}

@@ -235,4 +235,33 @@ test('worker normalizes edited numeric strings and rejects invalid inputs',()=>{
  assert.ok(response.result.errors.length>0);assert.equal(response.result.placements.length,0);
 });
 
+test('method selector keeps the research model, displayed contour and validation in sync',async()=>{
+ localStorage.clear();
+ const rows=[{id:'case',name:'Sentetik kasa',length:150,width:113,height:90,quantity:'4',
+  weight:'',stackable:false,allowRotation:false}];
+ localStorage.setItem('cargo-pmc-v1',JSON.stringify({version:1,rows,config:{maxPallets:'2'}}));
+ await act(async()=>{root.render(React.createElement(PmcPlanner,{key:'contour-v2'}));await pause();});await act(pause);
+ const method=field('Yerleşim yöntemi');
+ const status=()=>document.querySelector('[data-research-status]').getAttribute('data-research-status');
+ assert.ok(document.querySelector('[data-contour-profile="ZX-11"]'));
+ await change(method,'contour-v2');
+ assert.equal(status(),'PASS');
+ assert.match(document.querySelector('.pmc-output .panel-heading p').textContent,/V2 · Avianca Contour 1 · .* ms/);
+ assert.ok(document.querySelector('[data-contour-profile="Avianca Contour 1"]'));
+ assert.equal(document.querySelector('[data-dimension="dim-flat"]'),null);
+ await click(button('2D'));
+ assert.ok(document.querySelectorAll('[data-research-projection]').length>=3);
+ await change(field('Araştırma Paket aralığı (mm)'),'5');
+ assert.equal(status(),'UNKNOWN');
+ assert.equal(button('JSON indir').disabled,true);
+ await click(button('Paletlere yerleştir'));
+ assert.equal(status(),'PASS');
+ assert.equal(JSON.parse(localStorage.getItem('cargo-pmc-v1')).config.researchSettings.gapMm,'5');
+ await change(method,'legacy');
+ await click(button('3D'));
+ assert.ok(document.querySelector('[data-contour-profile="ZX-11"]'));
+ assert.ok(document.querySelector('[data-dimension="dim-flat"]'));
+ assert.ok(field('Tek PMC üzerinde uzun yük · TEST')||document.querySelector('.pmc-overhang input'));
+});
+
 test.after(async()=>{await act(async()=>root.unmount());dom.window.close();await rm(output,{force:true});});

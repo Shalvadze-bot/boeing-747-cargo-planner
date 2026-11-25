@@ -2,6 +2,8 @@ import React from 'react';
 import { PMC } from './pmc-engine.mjs';
 import { balanceProfile, measurePmcBalance } from './pmc-long-balance.mjs';
 import { modelCapacity } from './pmc-ai-validation.mjs';
+import { researchEnvelopeMm3, researchSectionCm } from './pmc-contour-space.mjs';
+import { RESEARCH_PROFILE_LABEL } from './pmc-research-review.mjs';
 import PmcScene from './PmcScene';
 
 const fmt = (n, d=1) => Number.isFinite(n) ? n.toLocaleString('tr-TR',{maximumFractionDigits:d}) : '—';
@@ -17,7 +19,7 @@ export function ViewSwitch({ view, onChange, label='Plan görünümü' }) {
   </div>;
 }
 
-function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, heightCut=Infinity, placementAction, researchViolationIds=[] }) {
+function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, heightCut=Infinity, placementAction, researchViolationIds=[], showContour=true }) {
   const indices = pallet == null ? result.pallets.map(p => p.index) : [pallet];
   const items = result.placements.filter(p => p.z < heightCut && (pallet == null ||
     p.palletIndex === pallet || p.touchedPallets?.includes(pallet)));
@@ -27,18 +29,21 @@ function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, h
   const minY = Math.min(...indices.map(i=>i*PMC.length),...items.map(i=>i.y),indices.length?Infinity:0) - 15;
   const maxY = Math.max(...indices.map(i=>(i+1)*PMC.length),...items.map(i=>i.y+i.l),indices.length?-Infinity:PMC.length) + 15;
   const layout = [minX,minY,maxX-minX,maxY-minY].join(' ');
+  const projection = result.researchModel && showContour ? researchSectionCm(result.researchModel) : [];
   const activate = (event, callback) => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); callback(); }
   };
   return <div className="pmc-floor">
     {placementAction && <div className="pmc-floor-actions">{placementAction}</div>}
-    <svg viewBox={layout} role="group" aria-label="PMC yerleşimi, 2D üst görünüm">
+    <svg viewBox={layout} role="group" aria-label={'PMC yerleşimi, 2D üst görünüm'+(result.researchModel?' · '+RESEARCH_PROFILE_LABEL:'')}>
       {indices.map(index => <g key={index} role="button" tabIndex={0} aria-label={port(index)+' ayrıntıları'}
         onClick={()=>onPallet?.(index)} onKeyDown={event=>activate(event,()=>onPallet?.(index))}>
         <rect x={0} y={index*PMC.length} width={PMC.width} height={PMC.length} rx={3} fill="#233346"
           stroke="#8398af" strokeWidth={1.6}/>
         <rect x={PMC.margin} y={index*PMC.length+PMC.margin} width={PMC.usableWidth} height={PMC.usableLength}
           fill="none" stroke="#ffcf68" strokeWidth={1.3} strokeDasharray="4 3"/>
+        {projection.map(([x],i)=><line key={i} data-research-projection={i} x1={x} x2={x}
+          y1={index*PMC.length} y2={(index+1)*PMC.length} stroke="#a9c9eb" strokeOpacity=".65" strokeDasharray="4 3"/>)}
         <text x={4} y={index*PMC.length-3} fill="#c7d5e1" fontSize={7}>{port(index)}</text>
       </g>)}
       {order.map(item => <g key={item.id} role="button" tabIndex={0} aria-pressed={item.id===itemId}
@@ -51,7 +56,8 @@ function PmcFloorView({ result, pallet, itemId, onItem, onPallet, labels=true, h
           fontWeight={700} fontSize={Math.min(7,item.w/8,item.l/4)} pointerEvents="none">{item.id}</text>}
       </g>)}
     </svg>
-    <span>Üst üste parçaları aşağıdaki parça listesinden de seçebilirsin.</span>
+    <span>{result.researchModel ? 'Kesikli mavi çizgiler Contour 1 çatısının taban izdüşümünü gösterir.' :
+      'Üst üste parçaları aşağıdaki parça listesinden de seçebilirsin.'}</span>
   </div>;
 }
 
@@ -63,7 +69,11 @@ export function PmcPlacementDetails({ result, pallet, itemId, onItem }) {
   if (active === undefined || !group) return null;
   const mirrored = !!result.config?.mirrored;
   const boxes = parts.map(item => ({ ...item,y:item.y-active*PMC.length,item:{row:{weight:item.weight}} }));
-  const capacity = modelCapacity(boxes,mirrored);
+  const model = result.researchModel;
+  const capacity = model ? {
+    remainingM3:Math.max(0,researchEnvelopeMm3(model)/1e9-parts.reduce((sum,p)=>sum+p.w*p.l*p.h/1e6,0)),
+    remainingDeckM2:Math.max(0,model.usable.widthMm*model.usable.lengthMm/1e6-parts.reduce((sum,p)=>sum+p.w*p.l/1e4,0)),
+  } : modelCapacity(boxes,mirrored);
   const balance = measurePmcBalance(boxes,balanceProfile(result.config?.pmcBalance));
   const weight = parts.reduce((sum,item) => sum + (item.weight??0),0);
   const matched = selected?.supportIds ?? (selected?.supportId ? [selected.supportId] : []);
@@ -100,8 +110,8 @@ export function PmcPlacementDetails({ result, pallet, itemId, onItem }) {
 export function PmcPlanView({ view,result,pallet,itemId,onItem,onPallet,...options }) {
   return view==='2D' ? <PmcFloorView result={result} pallet={pallet} itemId={itemId}
     onItem={onItem} onPallet={onPallet} labels={options.labels} heightCut={options.heightCut}
-    placementAction={options.placementAction} researchViolationIds={options.researchViolationIds}/> :
+    placementAction={options.placementAction} researchViolationIds={options.researchViolationIds} showContour={options.showContour}/> :
     <PmcScene placements={result.placements} palletCount={Math.max(1,result.pallets.length)} selectedPallet={pallet}
       selectedItemId={itemId} onSelectItem={onItem} onSelectPallet={onPallet}
-      mirrorContour={!!result.config?.mirrored} {...options}/>;
+      mirrorContour={!!result.config?.mirrored} researchModel={result.researchModel} {...options}/>;
 }
