@@ -10,7 +10,7 @@ import './pmc-planner.css';
 import PmcGeometryPanel from './PmcGeometryPanel';
 import { assessResearchPlan, DEFAULT_RESEARCH_SETTINGS } from './pmc-research-review.mjs';
 import './ai-packing.css';
-import { STRATEGY_NAMES } from './pmc-search-strategies.mjs';
+import { normalizePmcConfig, STRATEGY_NAMES } from './pmc-search-strategies.mjs';
 import { measuredEngine, packingSignature, unmarkedConfig, useAiPacking } from './use-ai-packing.mjs';
 import { AiPackingButton, AiPackingPanel } from './AiPackingPanel';
 import { cargoKey, expandPmcSnapshot, makePmcSnapshot, pmcRestoreConfig, readHistory, writeHistory } from './plan-history.mjs';
@@ -105,7 +105,7 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
   const timeout = useRef(null);
   const currentSignature = signature(rows, config);
   const stale = !!result && resultSignature !== currentSignature;
-  const researchAssessment = useMemo(()=>assessResearchPlan({rows,result,stale,busy,settings:researchSettings}),[rows,result,stale,busy,researchSettings]);
+  const researchAssessment = useMemo(()=>assessResearchPlan({rows,result,stale,busy:busy||restoring,settings:researchSettings}),[rows,result,stale,busy,restoring,researchSettings]);
   const lastPmc = history.pmc[0];
   const previousOutdated = lastPmc && lastPmc.cargoKey !== cargoKey(rows);
   const previousModeChanged = lastPmc && !!lastPmc.config?.longCargo !== !!config.longCargo;
@@ -253,7 +253,9 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
   function submitTransfer(event){event.preventDefault();if(stale || busy || !result){setTransferError('PMC girdileri değişti. Kapatıp yeniden hesaplayın.');return;}try{const form=new FormData(event.currentTarget);onImportAircraft(result,transfer.map(p=>Number(form.get('weight-'+p.index))));setTransfer(null);}catch(cause){setTransferError(cause.message);}}
   function download() {
     if (!result || stale || result.errors?.length) return;
-    const payload = { version: 1, label: 'SİMÜLASYON — UÇUŞ OPERASYONLARI İÇİN ONAYLI DEĞİLDİR', generatedAt: new Date().toISOString(), input: { rows, config }, result };
+    const {status,phase,message,model,report} = researchAssessment;
+    const payload = { version: 1, label: 'SİMÜLASYON — UÇUŞ OPERASYONLARI İÇİN ONAYLI DEĞİLDİR', generatedAt: new Date().toISOString(), input: { rows, config }, result,
+      geometryValidation: { status,phase,message,settings:researchSettings,model,report } };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'pmc-3d-simulasyon-plani.json'; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -320,7 +322,7 @@ export default function PmcPlanner({onImportAircraft, viewOnly = false, cloudBac
         throw new Error('Yük veya ayar değişti. Önceki plan uygulanmadı.');
       }
       if (!checked.validation.valid) throw new Error('Önceki plan güncel kısıtlarda geçerli değil: '+checked.validation.errors[0]);
-      const next = {...checked.result,config:{...saved.config,...targetConfig}};
+      const next = {...checked.result,config:{...saved.config,...normalizePmcConfig(targetConfig)}};
       setHistory(writeHistory(current=>({...current,pmc:current.pmc.slice(1),currentPmc:makePmcSnapshot(next,rows,targetConfig)})));
       setConfig(targetConfig);
       setResult(next);

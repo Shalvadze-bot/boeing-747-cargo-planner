@@ -35,6 +35,13 @@ export function strategyOrientations(variants, strategy) {
   return variants;
 }
 
+export function normalizePmcConfig(config) {
+  return { ...config, maxPallets: Number(config.maxPallets),
+    maxOverhangCm: config.allowOverhang && config.maxOverhangCm !== '' && config.maxOverhangCm != null ? Number(config.maxOverhangCm) : null,
+    minOverhangHeightCm: config.allowOverhang && config.minOverhangHeightCm !== '' && config.minOverhangHeightCm != null ? Number(config.minOverhangHeightCm) : null,
+  };
+}
+
 export function normalizePmcInput(rows, config) {
   return {
     rows: rows.map(row => ({ ...row,
@@ -42,9 +49,6 @@ export function normalizePmcInput(rows, config) {
       quantity: Number(row.quantity),
       weight: row.weight === '' || row.weight == null ? null : Number(row.weight),
     })),
-    config: { ...config, maxPallets: Number(config.maxPallets),
-      maxOverhangCm: config.allowOverhang && config.maxOverhangCm !== '' && config.maxOverhangCm != null ? Number(config.maxOverhangCm) : null,
-      minOverhangHeightCm: config.allowOverhang && config.minOverhangHeightCm !== '' && config.minOverhangHeightCm != null ? Number(config.minOverhangHeightCm) : null,
-    },
+    config: normalizePmcConfig(config),
   };
 }

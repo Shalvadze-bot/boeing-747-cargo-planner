@@ -36,6 +36,7 @@
 
 /* Independent A330 research review. Keep the existing ZX-11 renderer/optimizer unchanged. */
 .pmc-research-validator{margin:12px 18px 4px;padding:12px;border:1px solid #3a495d;border-radius:8px;background:#101b29;color:#b5c4d4;font-size:11px;line-height:1.55;min-width:0;overflow-wrap:anywhere}
+.pmc-table-scroll{position:relative}
 .pmc-research-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pmc-research-heading h3{font-size:14px;color:#e5ecf3;margin:0}
 .pmc-research-validator p{margin:5px 0}

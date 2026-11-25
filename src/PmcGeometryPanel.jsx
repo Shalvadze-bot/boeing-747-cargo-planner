@@ -12,7 +12,7 @@ const issueLabels = {
   CONTOUR_WIDTH_EXCEEDED:'Contour 1 genişliği aşıldı', CONTOUR_HEIGHT_EXCEEDED:'Contour 1 yüksekliği aşıldı',
   INVALID_TRANSFORM:'Geçersiz datum dönüşümü', UNKNOWN_OR_DUPLICATE_UNPLACED:'Yerleşmeyen parça kaydı geçersiz',
   ITEM_NOT_ACCOUNTED_FOR:'Parça kaydı eksik', BOX_OVERLAP:'Parçalar çakışıyor',
-  HORIZONTAL_CLEARANCE_EXCEEDED:'Araştırma paket aralığı sağlanmadı',
+  HORIZONTAL_CLEARANCE_EXCEEDED:'Araştırma paket aralığı sağlanmadı', NO_PLACED_ITEMS:'Kontrol edilecek yerleşim yok',
 };
 const fmt = n => Number.isFinite(n) ? n.toLocaleString('tr-TR',{maximumFractionDigits:2})+' mm' : '—';
 
@@ -25,11 +25,12 @@ export default function PmcGeometryPanel({assessment,settings,onSetting,onItem})
       <div><h3>A330-243F · Geometry Validator V1</h3><p>Avianca A330-200F Contour 1 · ana güverte araştırma referansı</p></div>
       <strong className={'pmc-research-status pmc-research-'+status.toLowerCase()} aria-live="polite">{status}</strong>
     </div>
+    <p>Yerleşim motoru ve ana çizim <b>ZX-11</b> modelini kullanır. Bağımsız kontrol <b>Avianca Contour 1</b> modelini kullanır.</p>
     <p className="pmc-research-notice">SİMÜLASYON — Operasyon onayı yok. Hedef operatöre uygulanabilirlik doğrulanmadı.</p>
     {phase==='checked' ? <>
       <p aria-live="polite">{report.placedCount} yerleşen · {report.unplacedCount} yerleşmeyen · {violationIds.length} işaretli parça · {fails} ihlal / {unknowns} belirsizlik</p>
-      <p>En dar hesaplanan dikey pay: <b>{fmt(report.minVerticalMarginMm)}</b>{!report.complete && ' · Yerleşim tamamlanmadı.'}</p>
-      <p>PASS yalnızca tanımlı araştırma modelini ifade eder. Ana 2D/3D çizim ve optimizer ZX-11 modelini korur; kırmızı kenarlar ayrı Contour 1 araştırma kontrolündeki ihlalleri gösterir.</p>
+      <p>En dar hesaplanan dikey pay <b>{fmt(report.minVerticalMarginMm)}</b> · {report.complete ? 'Tüm parçalar yerleşti.' : 'Yerleşim tamamlanmadı.'}</p>
+      <p>Kırmızı kenarlar Contour 1 araştırma kontrolünde işaretlenen parçaları gösterir.</p>
     </> : <p role="status">{message}</p>}
     <details className="pmc-research-details">
       <summary>Araştırma ölçüleri ve kontrol notları</summary>

@@ -89,3 +89,66 @@ function geometryCases(validate, make, adapt, assert) {
 }
 
 for (const {name,run} of geometryCases(validatePmcGeometry,makeResearchModel,fromLegacyPmcPlan,assert)) test(name,run);
+
+test('shipment completeness and geometric validity are independent', () => {
+  const item = {id:'a',widthMm:1000,lengthMm:1200,heightMm:1500,allowedOrientations:['yaw0']};
+  const position = {id:'a',palletIndex:0,uMm:1268.4,vMm:0,zMm:0,orientation:'yaw0',
+    widthMm:1000,lengthMm:1200,heightMm:1500};
+  const model = makeResearchModel();
+  const invalidGeometry = validatePmcGeometry({items:[item],placements:[position],model});
+  assert.equal(invalidGeometry.status,'FAIL');
+  assert.equal(invalidGeometry.complete,true);
+  const empty = validatePmcGeometry({items:[item],placements:[],unplacedIds:['a'],model});
+  assert.equal(empty.status,'UNKNOWN');
+  assert.equal(empty.complete,false);
+  assert.ok(empty.issues.some(issue=>issue.code==='NO_PLACED_ITEMS'));
+});
+
+test('reported yaw, assigned pallet and raw coordinate types are checked independently', () => {
+  const rows = [{id:'a',quantity:'1',width:'100',length:'120',height:'130',allowRotation:true}];
+  const model = makeResearchModel();
+  const box = {id:'a:1',palletIndex:1,touchedPallets:[1],x:8.5,y:326,z:0,w:100,l:120,h:130,
+    orientationFace:'upright',rotated:false};
+  const check = placement => validatePmcGeometry(fromLegacyPmcPlan(rows,{
+    config:{mirrored:false},placements:[placement],unplaced:[],
+  },model));
+  assert.equal(check(box).status,'PASS');
+  assert.ok(check({...box,rotated:true}).issues.some(issue=>issue.code==='ORIENTATION_DIMENSION_MISMATCH'));
+  assert.ok(check({...box,touchedPallets:[0]}).issues.some(issue=>issue.code==='INVALID_PLACEMENT'));
+  assert.ok(check({...box,x:'8.5'}).issues.some(issue=>issue.code==='INVALID_PLACEMENT'));
+  assert.ok(check({...box,y:8.5}).issues.some(issue=>issue.code==='NEGATIVE_LOCAL_COORDINATE'));
+  assert.equal(check({...box,orientationFace:'side-width'}).status,'UNKNOWN');
+  assert.equal(check({...box,orientationFace:'yaw0'}).status,'UNKNOWN');
+});
+
+test('numeric row data rejects non-decimal values and excessive expansion', () => {
+  const model = makeResearchModel(), result = {config:{mirrored:false},placements:[],unplaced:[]};
+  const row = {id:'a',quantity:'1',width:'0x100',length:120,height:130};
+  const invalid = validatePmcGeometry(fromLegacyPmcPlan([row],result,model));
+  assert.ok(invalid.issues.some(issue=>issue.code==='INVALID_OR_DUPLICATE_ITEM'));
+  for (const quantity of [true,'',Infinity,'NaN','0','-1','1.1','0x1',201]) {
+    assert.throws(()=>fromLegacyPmcPlan([{...row,quantity}],result,model),/Invalid source row/);
+  }
+  assert.throws(()=>fromLegacyPmcPlan([{...row,quantity:101},{...row,id:'b',quantity:100}],result,model),/Invalid source row/);
+});
+
+test('seeded containment cases agree with the source drawing and affine transformations', () => {
+  const roof = x => x<=965.2 ? 2438.4 : x<=1879.6 ? 2438.4-(x-965.2)*2/3 : 1828.8-(x-1879.6)*35/18;
+  let seed = 240217;
+  const random = () => (seed = (Math.imul(seed,1664525)+1013904223)>>>0)/2**32;
+  for (let i=0;i<240;i++) {
+    const widthMm=100+400*random(), lengthMm=200+300*random();
+    const uMm=(2268.4-widthMm)*random(), vMm=(3005-lengthMm)*random();
+    const highEdgeOffsetMm=10+35*random(), verticalOffsetMm=15*random(), mirrored=i%2===0;
+    const lastX=highEdgeOffsetMm+(mirrored?2268.4-uMm:uMm+widthMm);
+    const expectedMargin=i%3===0?-0.001:i%3===1?0:0.001;
+    const heightMm=roof(lastX)-verticalOffsetMm-expectedMargin;
+    const model=makeResearchModel();
+    Object.assign(model.contour,{highEdgeOffsetMm,verticalOffsetMm,mirrored});
+    const item={id:'a',widthMm,lengthMm,heightMm,allowedOrientations:['yaw0']};
+    const box={...item,uMm,vMm,zMm:0,palletIndex:i%30,orientation:'yaw0'};
+    const result=validatePmcGeometry({items:[item],placements:[box],model});
+    assert.equal(result.status,expectedMargin<0?'FAIL':'PASS');
+    assert.ok(Math.abs(result.minVerticalMarginMm-expectedMargin)<1e-8);
+  }
+});

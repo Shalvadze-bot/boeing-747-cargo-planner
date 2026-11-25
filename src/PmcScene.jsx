@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import './pmc-scene.css';
 import {lateralBounds} from './pmc-long-cargo.mjs';
-import {contourHeight} from './pmc-engine.mjs';
+import {PMC,contourHeight} from './pmc-engine.mjs';
 
-const W = 243.84, L = 317.5, H = 243.84, M = 8.5;
+const {width:W,length:L,maxHeight:H,margin:M,shoulderX,lowHeight} = PMC;
 const ISO = { yaw: -0.66, pitch: 0.48 };
 const NOSE_TO_TAIL = { yaw: Math.PI, pitch: 0.001 };
 const fmt = n => Number(n).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
@@ -83,7 +83,7 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
   function dimension(a,b,text,key) { if (!showDimensions) return null; const p=project(a),q=project(b), mid=[(p[0]+q[0])/2,(p[1]+q[1])/2], lines=text.split("\n");return <g key={key} className="pmc-scene-dimension" data-dimension={key} aria-label={lines.join(" ")}>{line(a,b,{markerStart:`url(#${id}-arrow)`,markerEnd:`url(#${id}-arrow)`})}<text x={mid[0]} y={mid[1]-9-(lines.length-1)*13} textAnchor="middle">{lines.map((part,i)=><tspan key={i} x={mid[0]} dy={i?13:0}>{part}</tspan>)}</text></g>; }
   const first = indices[0];
   // Labels follow the same mirrored physical contour, not the inset base.
-  const highX=mirrorContour?W:0, shoulderX=mirrorContour?W-100.33:100.33, lowX=mirrorContour?0:W;
+  const highX=mirrorContour?W:0, shoulder=mirrorContour?W-shoulderX:shoulderX, lowX=mirrorContour?0:W;
   const highDimX=highX+(mirrorContour?18:-18), lowDimX=lowX+(mirrorContour?-22:22);
   return <section className="pmc-scene" aria-label="Üç boyutlu PMC yük yerleşimi">
     <div className="pmc-scene-toolbar">
@@ -138,7 +138,7 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
         <ellipse cx="450" cy="378" rx="355" ry="115" fill={`url(#${id}-ground)`}/>
         {sorted.map(f=><polygon key={f.key} data-item-id={f.item?.id} data-pmc-index={f.pallet} points={pts(f.p)} fill={shade(f.color,f.light)} fillOpacity={f.item && selectedPallet!=null && f.item.palletIndex!==selectedPallet ? .84 : 1} data-research-violation={researchViolationIds.includes(f.item?.id)?'true':undefined} stroke={researchViolationIds.includes(f.item?.id)?'#ff7272':f.item?.id===selectedItemId?'#fff3ae':f.item?'#0e1728':f.margin?'#f3c75d':'#9aabc1'} strokeWidth={researchViolationIds.includes(f.item?.id)||f.item?.id===selectedItemId?2.3:f.margin ? .5 : .8} strokeLinejoin="round" onClick={f.item?()=>select(f.item):undefined} className={f.item?'pmc-scene-box':undefined}><title>{f.item?`${f.item.name} · ${f.item.id} · ${fmt(f.item.w)} × ${fmt(f.item.l)} × ${fmt(f.item.h)} cm`:f.margin?'8,5 cm / ≈3,35″ kenar boşluğu':'PMC taban plakası'}</title></polygon>)}
         {showContour && indices.map(i=>{
-          const contour = [[0,0],[0,H],[100.33,H],[W,104.14],[W,0]].map(([x,z])=>[mirrorContour?W-x:x,z]);
+          const contour = [[0,0],[0,H],[shoulderX,H],[W,lowHeight],[W,0]].map(([x,z])=>[mirrorContour?W-x:x,z]);
           return <g key={`contour-${i}`} className="pmc-scene-contour">{[i*L,(i+1)*L].map((y,k)=><polyline key={k} points={pts(contour.map(([x,z])=>point(x,y,z)))} />)}{contour.slice(1,4).map(([x,z],j)=> <g key={j}>{line(point(x,i*L,z),point(x,(i+1)*L,z),{strokeDasharray:'5 5'})}</g>)}</g>;
         })}
         {indices.map(i=>{const p=project(point(W/2,i*L+L/2,-7));return <g key={`label-${i}`} className="pmc-scene-pallet-label"><text x={p[0]} y={p[1]+26} textAnchor="middle">PMC {String(i+1).padStart(2,'0')}</text></g>;})}
@@ -153,8 +153,8 @@ export default function PmcScene({ placementAction, onMoveCargo, placements = []
         {dimension(point(W+22,first*L),point(W+22,(first+1)*L),'125″ / 317,5 cm · Y','dim-y')}
         {camera.pitch<1.4 && dimension(point(highDimX,first*L,0),point(highDimX,first*L,H),'Yüksek kenar\n96″ / 243,84 cm · Z','dim-z')}
         {showContour && camera.pitch<1.4 && <>
-          {dimension(point(highX,first*L-24,H+14),point(shoulderX,first*L-24,H+14),'Düz üst\n39,5″ / 100,33 cm','dim-flat')}
-          {dimension(point(lowDimX,first*L-24,0),point(lowDimX,first*L-24,104.14),'Alçak kenar\n41″ / 104,14 cm','dim-low')}
+          {dimension(point(highX,first*L-24,H+14),point(shoulder,first*L-24,H+14),'Düz üst\n39,5″ / 100,33 cm','dim-flat')}
+          {dimension(point(lowDimX,first*L-24,0),point(lowDimX,first*L-24,lowHeight),'Alçak kenar\n41″ / 104,14 cm','dim-low')}
         </>}
         {!visible.length && <text x="450" y="474" textAnchor="middle" className="pmc-scene-empty">Yük ekleyin; yerleşimi burada üç boyutlu görün.</text>}
       </svg>

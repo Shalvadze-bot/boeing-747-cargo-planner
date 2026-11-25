@@ -48,3 +48,16 @@ function integrationCases(assess,assert) {
 }
 
 for(const {name,run} of integrationCases(assessResearchPlan,assert))test(name,run);
+
+test('worker result accepts an edited quantity serialized by the PMC form', () => {
+ const rows=[{id:'cargo',width:'100',length:'120',height:'130',quantity:'2',allowRotation:true}];
+ const a=assessResearchPlan({rows,settings:{gapMm:'0',offsetMm:'34.2',verticalMm:'0'},result:{
+  config:{mirrored:false,maxPallets:3},
+  placements:[{id:'cargo:1',palletIndex:0,x:8.5,y:8.5,z:0,w:100,l:120,h:130,orientationFace:'upright',rotated:false}],
+  unplaced:[{id:'cargo:2'}],
+ }});
+ assert.equal(a.status,'PASS');
+ assert.equal(a.report.complete,false);
+ assert.equal(a.report.unplacedCount,1);
+ assert.equal(a.report.operationalApproval,false);
+});
